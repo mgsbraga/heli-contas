@@ -11,10 +11,11 @@ import { execFileSync } from 'node:child_process';
 import { novoSalt, derivarChave, decifrar, paraObjeto, b64 } from './lib/crypto.mjs';
 import {
   P, RAIZ, LEDGER_VAZIO, lerLedger, gravarLedger, lerSegredos, gravarSegredos,
-  brl, parseValor, parseData, hojeISO, proximoId,
+  brl, parseValor, parseData, parsePct, hojeISO, proximoId,
   pergunta, senhaOculta, escolher, limparCaminho,
 } from './lib/io.mjs';
 import { build, mimeDe } from './lib/build.mjs';
+import { montarRateio } from './lib/rateio.mjs';
 
 const git = (...args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' });
 
@@ -50,7 +51,10 @@ async function cmdInit() {
   fs.mkdirSync(P.nfOrig, { recursive: true });
 
   await build();
-  console.log('\n  Pronto. Próximo passo:  node heli.mjs add\n');
+  console.log('\n  Pronto.');
+  console.log('  Se a operação tem mais de um sócio bancando as despesas, defina as quotas');
+  console.log('  agora — o rateio passa a ser automático:  node heli.mjs socios');
+  console.log('  Depois, para lançar:  node heli.mjs add\n');
 }
 
 async function lerSenhaNova(rotulo) {
@@ -101,6 +105,7 @@ async function cmdAdd() {
   if (forma.novo) ledger.formas.push(forma.valor);
 
   const status = (await escolher('Status', ['pago', 'a pagar', 'reembolsar'], { padrao: 'pago' })).valor;
+  const rateio = await perguntarRateio(ledger, pag.valor);
   const obs = await pergunta('\n  Observação (enter p/ pular)');
 
   const id = proximoId(ledger, data);
@@ -110,7 +115,7 @@ async function cmdAdd() {
     id, data, descricao, categoria: cat.valor,
     fornecedor, cnpj,
     documento: { tipo: tipoDoc, numero: numDoc },
-    valor, pagador: pag.valor, forma: forma.valor, status, obs, anexos,
+    valor, pagador: pag.valor, forma: forma.valor, status, rateio, obs, anexos,
     registradoEm: new Date().toISOString(),
   });
   ledger.lancamentos.sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
@@ -119,6 +124,42 @@ async function cmdAdd() {
   console.log('\n  ✓ ' + id + ' · ' + descricao + ' · ' + brl(valor) + ' · pago por ' + pag.valor);
   await build();
   await talvezPublicar();
+}
+
+/**
+ * Como esta despesa se divide entre os sócios.
+ * null significa "pelas quotas padrão" — é o caso da esmagadora maioria, então é
+ * o que sai apertando enter, e o ledger não carrega repetição desnecessária.
+ */
+async function perguntarRateio(ledger, pagador) {
+  const socios = ledger.socios || [];
+  if (!socios.length) return null;
+
+  const quotas = socios.map((s) => `${s.nome} ${s.quota}%`).join(' · ');
+  const opcao = (await escolher('Como dividir esta despesa', [
+    `pelas quotas (${quotas})`,
+    'percentuais só para este lançamento',
+    `inteira para ${pagador} (não dividir)`,
+  ], { padrao: `pelas quotas (${quotas})` })).valor;
+
+  if (opcao.startsWith('pelas quotas')) return null;
+  if (opcao.startsWith('inteira')) return [{ socio: pagador, pct: 100 }];
+
+  while (true) {
+    const custom = [];
+    console.log('');
+    for (const s of socios) {
+      let pct = NaN;
+      while (!Number.isFinite(pct)) {
+        pct = parsePct(await pergunta(`  % de ${s.nome}`, String(s.quota)));
+        if (!Number.isFinite(pct)) console.log('  ↳ informe um número entre 0 e 100.');
+      }
+      if (pct > 0) custom.push({ socio: s.nome, pct });
+    }
+    const soma = Math.round(custom.reduce((s, x) => s + x.pct, 0) * 100) / 100;
+    if (soma === 100) return custom;
+    console.log(`  ↳ soma ${soma}%, precisa dar 100%. Recomece.`);
+  }
 }
 
 async function coletarAnexos(id) {
@@ -141,6 +182,77 @@ async function coletarAnexos(id) {
     console.log('  ↳ anexado: ' + path.basename(origem));
   }
   return anexos;
+}
+
+// ---------------------------------------------------------------- sócios / acerto
+
+async function cmdSocios() {
+  const ledger = lerLedger();
+  console.log('\n  ── Quadro societário ───────────────────────────────────');
+  if (ledger.socios?.length) {
+    console.log('\n  Hoje:');
+    for (const s of ledger.socios) console.log(`    ${s.nome} — ${s.quota}%`);
+    console.log('\n  Definir de novo (o que você digitar substitui o quadro atual).');
+  } else {
+    console.log('\n  Ainda não há sócios. As quotas definem como cada despesa é dividida.');
+  }
+
+  const novos = [];
+  while (true) {
+    const nome = await pergunta(`\n  Sócio ${novos.length + 1} — nome (enter p/ encerrar)`);
+    if (!nome) break;
+    let quota = NaN;
+    while (!Number.isFinite(quota)) {
+      quota = parsePct(await pergunta(`  Quota de ${nome} (%)`));
+      if (!Number.isFinite(quota)) console.log('  ↳ informe um número entre 0 e 100.');
+    }
+    novos.push({ nome, quota });
+  }
+  if (!novos.length) { console.log('\n  Nada alterado.\n'); return; }
+
+  const soma = Math.round(novos.reduce((s, x) => s + x.quota, 0) * 100) / 100;
+  console.log('');
+  for (const s of novos) console.log(`    ${s.nome} — ${s.quota}%`);
+  console.log(`    ${'─'.repeat(30)}\n    soma: ${soma}%`);
+  if (soma !== 100) {
+    console.log('\n  As quotas não somam 100%. O rateio ainda funciona (divide na proporção');
+    console.log('  do que você informou), mas confira se é isso mesmo que você quer.');
+    if ((await pergunta('  Gravar assim? (s/N)')).toLowerCase() !== 's') { console.log('  Cancelado.\n'); return; }
+  }
+
+  ledger.socios = novos;
+  for (const s of novos) if (!ledger.pagadores.includes(s.nome)) ledger.pagadores.push(s.nome);
+  gravarLedger(ledger);
+  console.log('\n  ✓ quadro societário gravado.');
+  await build();
+  mostrarAcerto(lerLedger());
+}
+
+function mostrarAcerto(ledger) {
+  const r = montarRateio(ledger);
+  if (!r) {
+    console.log('\n  Sem quadro societário. Configure com:  node heli.mjs socios\n');
+    return;
+  }
+  console.log('\n  ── Acerto de contas ────────────────────────────────────\n');
+  console.log(`  Base rateada: ${brl(r.baseDesembolsada)} em ${r.qtdDesembolsados} lançamento(s) desembolsado(s).`);
+  if (r.emAberto) console.log(`  Fora da conta: ${brl(r.emAberto)} ainda a pagar.`);
+  console.log('');
+  console.log('   ' + 'SÓCIO'.padEnd(22) + 'QUOTA'.padStart(7) + 'PAGOU'.padStart(16) + 'CABIA'.padStart(16) + 'SALDO'.padStart(16));
+  for (const p of r.posicoes) {
+    const sinal = p.saldo > 0 ? '+' : '';
+    console.log('   ' + (p.socio + (p.externo ? ' *' : '')).padEnd(22) +
+      (p.quota + '%').padStart(7) + brl(p.pago).padStart(16) +
+      brl(p.devido).padStart(16) + (sinal + brl(p.saldo)).padStart(16));
+  }
+  if (r.posicoes.some((p) => p.externo)) {
+    console.log('\n   * pagou mas não é sócio — o valor inteiro é crédito a receber.');
+  }
+
+  console.log('\n  Para zerar:');
+  if (!r.acertos.length) console.log('    nada a acertar — as contas estão equilibradas.');
+  for (const a of r.acertos) console.log(`    ${a.de}  →  ${a.para}   ${brl(a.valor)}`);
+  console.log('');
 }
 
 // ---------------------------------------------------------------- list / rm
@@ -253,8 +365,10 @@ const AJUDA = `
   heli — prestação de contas
 
     node heli.mjs init       configuração inicial (senhas + ledger)
+    node heli.mjs socios     define os sócios e suas quotas
     node heli.mjs add        registra um lançamento (interativo)
     node heli.mjs list       lista os lançamentos no terminal
+    node heli.mjs acerto     quem deve a quem, e quanto
     node heli.mjs rm <id>    remove um lançamento
     node heli.mjs build      recifra docs/data/ sem publicar
     node heli.mjs publish    build + commit + push
@@ -265,6 +379,7 @@ const AJUDA = `
 const cmd = process.argv[2];
 const rotas = {
   init: cmdInit, add: cmdAdd, novo: cmdAdd, list: cmdList, ls: cmdList,
+  socios: cmdSocios, acerto: () => mostrarAcerto(lerLedger()),
   rm: () => cmdRm(process.argv[3]), build, publish: cmdPublish, senha: cmdSenha, restore: cmdRestore,
 };
 

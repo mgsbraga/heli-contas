@@ -248,6 +248,57 @@
   .anexo:hover { border-color: var(--accent-dim); color: var(--txt); }
   .anexo svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .7; }
 
+  /* rateio */
+  .socios {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+  }
+  .socio {
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 15px 17px;
+  }
+  .socio.credor { border-left: 2px solid var(--ok); }
+  .socio.devedor { border-left: 2px solid var(--warn); }
+  .socio .nome {
+    font-weight: 600; font-size: 13.5px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  }
+  .socio .quota { font-size: 11.5px; color: var(--txt-3); font-weight: 400; }
+  .socio .saldo {
+    font: 600 19px/1.2 var(--sans); letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; margin: 9px 0 3px;
+  }
+  .socio .saldo.credor { color: var(--ok); }
+  .socio .saldo.devedor { color: var(--warn); }
+  .socio .saldo.zerado { color: var(--txt-2); }
+  .socio .rotulo { font-size: 11.5px; color: var(--txt-3); }
+  .socio .linhas {
+    margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+    font-size: 12px; color: var(--txt-3);
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .socio .linhas div { display: flex; justify-content: space-between; gap: 10px; }
+  .socio .linhas span { font-variant-numeric: tabular-nums; color: var(--txt-2); }
+
+  .acertos { display: flex; flex-direction: column; gap: 9px; }
+  .acerto {
+    display: flex; align-items: center; gap: 11px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 11px 15px; font-size: 13.5px;
+  }
+  .acerto .de { color: var(--warn); font-weight: 500; }
+  .acerto .para { color: var(--ok); font-weight: 500; }
+  .acerto .seta { color: var(--txt-3); }
+  .acerto .valor {
+    margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .nota-rateio {
+    margin-top: 12px; font-size: 12px; color: var(--txt-3); line-height: 1.6;
+  }
+
   .vazio { padding: 40px; text-align: center; color: var(--txt-3); font-size: 13px; }
   .actions { display: flex; gap: 8px; margin-top: 14px; }
   .hint {
@@ -316,6 +367,16 @@
           <h2>Por mês</h2>
           <div class="bars" id="barsMes"></div>
         </div>
+      </div>
+    </section>
+
+    <section id="secRateio" style="display:none">
+      <h2>Rateio entre sócios</h2>
+      <div class="socios" id="socios"></div>
+      <div class="card" style="margin-top:18px">
+        <h2>Acerto de contas</h2>
+        <div class="acertos" id="acertos"></div>
+        <div class="nota-rateio" id="notaRateio"></div>
       </div>
     </section>
 
@@ -490,6 +551,52 @@ function kpis(itens) {
     </div>`).join('');
 }
 
+// ---------------- rateio entre sócios ----------------
+// Calculado no build e enviado igual nos dois escopos: é informação consolidada,
+// sem detalhe de despesa, e é o que um sócio precisa ver mesmo sem acesso total.
+
+function renderRateio(r) {
+  if (!r || !r.socios?.length) return;               // sem quadro societário, seção some
+  $('#secRateio').style.display = 'block';
+
+  $('#socios').innerHTML = r.posicoes.map((p) => {
+    const cls = p.saldo > 0.004 ? 'credor' : p.saldo < -0.004 ? 'devedor' : 'zerado';
+    const rotulo = cls === 'credor' ? 'tem a receber' : cls === 'devedor' ? 'tem a pagar' : 'em dia';
+    return `
+      <div class="socio ${cls === 'zerado' ? '' : cls}">
+        <div class="nome">
+          <span>${esc(p.socio)}</span>
+          <span class="quota">${p.externo ? 'não sócio' : p.quota + '%'}</span>
+        </div>
+        <div class="saldo ${cls}">${brl(Math.abs(p.saldo))}</div>
+        <div class="rotulo">${rotulo}</div>
+        <div class="linhas">
+          <div>desembolsou <span>${brl(p.pago)}</span></div>
+          <div>cabia a ele <span>${brl(p.devido)}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  $('#acertos').innerHTML = r.acertos.length
+    ? r.acertos.map((a) => `
+        <div class="acerto">
+          <span class="de">${esc(a.de)}</span>
+          <span class="seta">paga a</span>
+          <span class="para">${esc(a.para)}</span>
+          <span class="valor">${brl(a.valor)}</span>
+        </div>`).join('')
+    : '<div style="color:var(--txt-2);font-size:13px">Contas equilibradas — nada a acertar.</div>';
+
+  const notas = [
+    `Rateio sobre ${brl(r.baseDesembolsada)} em ${r.qtdDesembolsados} lançamento(s) já desembolsado(s).`,
+  ];
+  if (r.emAberto > 0) notas.push(`${brl(r.emAberto)} em aberto ficam de fora — ninguém desembolsou ainda.`);
+  if (r.posicoes.some((p) => p.externo)) notas.push('Quem não é sócio aparece como credor do valor inteiro que adiantou.');
+  if (r.quotasSomam !== 100) notas.push(`Atenção: as quotas somam ${r.quotasSomam}%, não 100%. A divisão segue a proporção informada.`);
+  if (r.semRateio > 0) notas.push(`Atenção: ${brl(r.semRateio)} sem rateio definido não foram atribuídos a ninguém.`);
+  $('#notaRateio').innerHTML = notas.map(esc).join('<br>');
+}
+
 // ---------------- escopo resumo ----------------
 
 function renderResumo() {
@@ -508,6 +615,7 @@ function renderResumo() {
   ]);
   barras($('#barsCat'), DADOS.porCategoria || []);
   barras($('#barsPag'), DADOS.porPagador || [], { classe: 'alt' });
+  renderRateio(DADOS.rateio);
   barras($('#barsMes'), meses, { classe: 'p2', rotulo: (i) => mesBR(i.nome) });
 }
 
@@ -531,6 +639,7 @@ function renderTotal() {
 
   barras($('#barsCat'), agregar(L, (l) => l.categoria));
   barras($('#barsPag'), agregar(L, (l) => l.pagador), { classe: 'alt' });
+  renderRateio(DADOS.rateio);
   barras($('#barsMes'), meses, { classe: 'p2', rotulo: (i) => mesBR(i.nome) });
 
   preencherSelect($('#fCat'), [...new Set(L.map((l) => l.categoria))].sort());
@@ -607,6 +716,9 @@ function detalhe(l) {
       ${campo('CNPJ / CPF', l.cnpj)}
       ${campo('Documento', [l.documento?.tipo, l.documento?.numero].filter(Boolean).join(' nº '))}
       ${campo('Forma de pagamento', l.forma)}
+      ${campo('Rateio', Array.isArray(l.rateio) && l.rateio.length
+        ? l.rateio.map((r) => `${r.socio} ${r.pct}%`).join(' · ')
+        : (DADOS.rateio?.socios?.length ? 'pelas quotas societárias' : ''))}
       ${campo('Registrado em', l.registradoEm ? new Date(l.registradoEm).toLocaleDateString('pt-BR') : '')}
       ${campo('Observação', l.obs)}
     </div>
@@ -632,12 +744,16 @@ async function abrirAnexo(arquivo, mime, nome) {
 
 $('#btnCsv').addEventListener('click', () => {
   const L = filtrados();
-  const cab = ['ID', 'Data', 'Descrição', 'Categoria', 'Fornecedor', 'CNPJ/CPF', 'Documento', 'Nº doc', 'Valor', 'Pagador', 'Forma', 'Status', 'Observação'];
+  const cab = ['ID', 'Data', 'Descrição', 'Categoria', 'Fornecedor', 'CNPJ/CPF', 'Documento', 'Nº doc', 'Valor', 'Pagador', 'Forma', 'Status', 'Rateio', 'Observação'];
   const cel = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const linhas = L.map((l) => [
     l.id, dataBR(l.data), l.descricao, l.categoria, l.fornecedor, l.cnpj,
     l.documento?.tipo, l.documento?.numero,
-    l.valor.toFixed(2).replace('.', ','), l.pagador, l.forma, l.status, l.obs,
+    l.valor.toFixed(2).replace('.', ','), l.pagador, l.forma, l.status,
+    Array.isArray(l.rateio) && l.rateio.length
+      ? l.rateio.map((r) => `${r.socio} ${r.pct}%`).join(' | ')
+      : (DADOS.rateio?.socios?.length ? 'quotas' : ''),
+    l.obs,
   ].map(cel).join(';'));
   const csv = '﻿' + [cab.map(cel).join(';'), ...linhas].join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
