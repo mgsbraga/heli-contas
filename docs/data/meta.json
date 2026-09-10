@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "kdf": "PBKDF2-SHA256",
+  "iter": 600000,
+  "alg": "AES-256-GCM",
+  "org": "Heli Eagle",
+  "geradoEm": "2026-09-10T17:21:14.639Z",
+  "saltTotal": "CC2Da5C5AdeYJGl9tAJijg==",
+  "saltResumo": "MEJ9WLAsLl8HwK3HVl/1hw=="
+}
