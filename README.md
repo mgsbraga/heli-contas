@@ -50,22 +50,42 @@ local/
   nf/                 as notas fiscais originais
 ```
 
+O `painel/` é só código de interface, sem dado nenhum, e nunca é servido pelo site
+público — ele existe apenas para o servidor local.
+
 ---
 
-## Uso no dia a dia
+## Uso no dia a dia — o painel
 
-Abra o PowerShell nesta pasta (ou dê dois cliques em `contas.bat`).
+Dois cliques em **`painel.bat`** (ou `node heli.mjs painel`). Abre uma página no seu
+navegador com o formulário de lançamento.
+
+Nela você:
+
+- preenche os campos lado a lado, com data em calendário e categoria, pagador e forma
+  em listas que aceitam valor novo digitado na hora;
+- **arrasta o PDF ou a foto da nota** para dentro da página — vários por lançamento;
+- escolhe como dividir a despesa entre os sócios;
+- vê a lista do que já foi lançado, com **Editar** e **Apagar** em cada linha;
+- acompanha o acerto entre sócios atualizado a cada gravação;
+- clica em **Publicar** quando quiser subir. O selo no topo avisa quando há
+  alterações pendentes.
+
+O painel roda na sua máquina e só aceita conexão dela mesma. Os dados em claro não
+saem do PC: a página conversa com o processo local, que grava em `local/` e publica
+cifrado — exatamente o que o terminal faz.
+
+Feche pelo botão **Fechar** na página ou com Ctrl+C na janela preta que abriu junto.
+
+### Ainda dá para usar o terminal
 
 ```powershell
 node heli.mjs add
 ```
 
-O comando pergunta data, descrição, categoria, fornecedor, CNPJ, tipo e número do
-documento, valor, quem pagou, forma de pagamento, status e como dividir entre os
-sócios (basta enter para usar as quotas). No fim pede o caminho do
-PDF ou foto da nota — pode arrastar o arquivo para dentro da janela do terminal, que
-o caminho é preenchido sozinho. Depois oferece publicar; aceitando, ele cifra,
-commita e envia. O site atualiza em cerca de um minuto.
+Mesmo resultado, por perguntas: data, descrição, categoria, fornecedor, CNPJ, tipo e
+número do documento, valor, quem pagou, forma, status, rateio e o caminho da nota —
+pode arrastar o arquivo para dentro da janela do terminal.
 
 ---
 
@@ -128,6 +148,7 @@ antigos antes de trocar o padrão.
 
 | Comando | O que faz |
 |---|---|
+| `node heli.mjs painel` | Abre o painel no navegador. O jeito fácil. |
 | `node heli.mjs init` | Configuração inicial: define as duas senhas e cria o ledger. Roda uma vez só. |
 | `node heli.mjs socios` | Define os sócios e suas quotas de rateio. |
 | `node heli.mjs add` | Registra um lançamento (interativo). |
@@ -141,7 +162,8 @@ antigos antes de trocar o padrão.
 
 ### Corrigir um lançamento já feito
 
-Edite `local/ledger.json` direto (é JSON legível) e rode `node heli.mjs publish`.
+Pelo painel: botão **Editar** na linha. Em último caso, `local/ledger.json` é JSON
+legível e pode ser editado à mão — depois rode `node heli.mjs publish`.
 
 ---
 

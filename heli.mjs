@@ -16,6 +16,8 @@ import {
 } from './lib/io.mjs';
 import { build, mimeDe } from './lib/build.mjs';
 import { montarRateio } from './lib/rateio.mjs';
+import { publicar } from './lib/publicar.mjs';
+import { abrirPainel } from './lib/painel.mjs';
 
 const git = (...args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' });
 
@@ -351,17 +353,16 @@ async function talvezPublicar() {
 }
 
 async function cmdPublish() {
-  await build({ verboso: false });
-  try {
-    const sujo = git('status', '--porcelain').trim();
-    if (!sujo) { console.log('\n  Nada novo para publicar.\n'); return; }
-    git('add', '-A');
-    git('commit', '-m', 'contas: ' + lerLedger().lancamentos.length + ' lançamentos — ' + hojeISO());
-    git('push');
-    console.log('\n  ✓ publicado. O site atualiza em cerca de um minuto.\n');
-  } catch (e) {
-    console.log('\n  Falha ao publicar: ' + String(e.stderr || e.message).trim() + '\n');
-  }
+  const r = await publicar();
+  console.log('\n  ' + (r.ok ? (r.novidade ? '✓ ' : '') : 'Falha ao publicar: ') + r.mensagem + '\n');
+}
+
+// ---------------------------------------------------------------- painel
+
+async function cmdPainel() {
+  const porta = Number(process.argv[3]) || undefined;
+  await abrirPainel(porta ? { porta } : {});
+  // o processo segue vivo servindo o painel até Ctrl+C ou "Fechar" na página
 }
 
 // ---------------------------------------------------------------- roteador
@@ -369,9 +370,10 @@ async function cmdPublish() {
 const AJUDA = `
   heli — prestação de contas
 
+    node heli.mjs painel     abre o painel no navegador  ← o jeito fácil
     node heli.mjs init       configuração inicial (senhas + ledger)
     node heli.mjs socios     define os sócios e suas quotas
-    node heli.mjs add        registra um lançamento (interativo)
+    node heli.mjs add        registra um lançamento pelo terminal
     node heli.mjs list       lista os lançamentos no terminal
     node heli.mjs acerto     quem deve a quem, e quanto
     node heli.mjs rm <id>    remove um lançamento
@@ -383,7 +385,8 @@ const AJUDA = `
 
 const cmd = process.argv[2];
 const rotas = {
-  init: cmdInit, add: cmdAdd, novo: cmdAdd, list: cmdList, ls: cmdList,
+  init: cmdInit, painel: cmdPainel, ui: cmdPainel,
+  add: cmdAdd, novo: cmdAdd, list: cmdList, ls: cmdList,
   socios: cmdSocios, acerto: () => mostrarAcerto(lerLedger()),
   rm: () => cmdRm(process.argv[3]), build, publish: cmdPublish, senha: cmdSenha, restore: cmdRestore,
 };

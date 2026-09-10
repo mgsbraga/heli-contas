@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de lançamentos</title>
+<style>
+  :root {
+    --bg: #0a0e13;
+    --panel: #111820;
+    --panel-2: #161f29;
+    --line: #1f2b38;
+    --line-soft: #18222d;
+    --txt: #e4ecf4;
+    --txt-2: #94a5b8;
+    --txt-3: #5f7186;
+    --accent: #f2a950;
+    --accent-dim: #7a5827;
+    --ok: #4ec9a0;
+    --warn: #e8825a;
+    --radius: 10px;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font: 400 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; cursor: pointer; }
+
+  /* topo */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(10,14,19,.94); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .top { max-width: 1120px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 13px; }
+  .mark { width: 25px; height: 25px; color: var(--accent); flex-shrink: 0; }
+  .org { font-weight: 600; letter-spacing: -0.01em; }
+  .sub { font-size: 11px; color: var(--txt-3); text-transform: uppercase; letter-spacing: .09em; }
+  .spacer { flex: 1; }
+
+  .badge {
+    font-size: 11.5px; padding: 4px 10px; border-radius: 20px;
+    border: 1px solid var(--line); color: var(--txt-3); white-space: nowrap;
+  }
+  .badge.pend { border-color: var(--accent-dim); color: var(--accent); }
+
+  .btn {
+    background: var(--accent); color: #171104; border: 0; border-radius: 8px;
+    padding: 9px 17px; font-weight: 600; font-size: 13.5px; white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .btn:hover:not(:disabled) { opacity: .88; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn-ghost { background: transparent; color: var(--txt-2); border: 1px solid var(--line); }
+  .btn-ghost:hover:not(:disabled) { color: var(--txt); border-color: var(--txt-3); }
+  .btn-perigo { background: transparent; color: var(--warn); border: 1px solid #4a2b20; }
+  .btn-perigo:hover { background: #1d1210; }
+  .btn-mini { padding: 5px 11px; font-size: 12px; font-weight: 500; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 24px 90px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line-soft);
+    border-radius: var(--radius); padding: 20px 22px; margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--txt-3); margin: 0 0 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card h2 .tag {
+    font-family: var(--mono); text-transform: none; letter-spacing: 0;
+    color: var(--accent); font-size: 12px;
+  }
+
+  /* formulário */
+  .grade { display: grid; grid-template-columns: repeat(12, 1fr); gap: 13px; }
+  .c2 { grid-column: span 2; } .c3 { grid-column: span 3; } .c4 { grid-column: span 4; }
+  .c5 { grid-column: span 5; } .c6 { grid-column: span 6; } .c12 { grid-column: span 12; }
+  @media (max-width: 860px) {
+    .c2, .c3, .c4, .c5 { grid-column: span 6; }
+  }
+  @media (max-width: 560px) {
+    .c2, .c3, .c4, .c5, .c6 { grid-column: span 12; }
+  }
+
+  label { display: block; font-size: 11px; color: var(--txt-3); margin-bottom: 5px; letter-spacing: .03em; }
+  label .op { color: var(--txt-3); opacity: .65; }
+  input, select, textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--txt); border-radius: 8px; padding: 9px 11px; font: inherit;
+    outline: none; transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent-dim); }
+  input::placeholder { color: #47576a; }
+  textarea { resize: vertical; min-height: 62px; }
+  select { cursor: pointer; }
+  .campo-erro { border-color: var(--warn) !important; }
+
+  /* rateio */
+  .opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opcao {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 13px;
+    font-size: 13px; color: var(--txt-2); cursor: pointer; background: var(--panel-2);
+  }
+  .opcao:hover { border-color: var(--txt-3); }
+  .opcao input { width: auto; margin: 0; accent-color: var(--accent); }
+  .opcao.ativa { border-color: var(--accent-dim); color: var(--txt); }
+  #rateioCustom { display: none; margin-top: 12px; }
+  #rateioCustom.on { display: block; }
+  .pcts { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .pct { width: 150px; }
+  .soma { font-size: 12.5px; color: var(--txt-3); padding-bottom: 9px; }
+  .soma.ok { color: var(--ok); }
+  .soma.ruim { color: var(--warn); }
+
+  /* anexos */
+  .zona {
+    border: 1px dashed var(--line); border-radius: var(--radius);
+    padding: 22px; text-align: center; color: var(--txt-3); font-size: 13px;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .zona:hover, .zona.sobre { border-color: var(--accent-dim); background: var(--panel-2); color: var(--txt-2); }
+  .zona b { color: var(--txt-2); font-weight: 500; }
+  .anexos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
+  .anexo {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 7px 9px 7px 12px; font-size: 12.5px; color: var(--txt-2);
+  }
+  .anexo a { color: var(--txt-2); text-decoration: none; }
+  .anexo a:hover { color: var(--accent); }
+  .anexo .x {
+    background: transparent; border: 0; color: var(--txt-3); font-size: 15px;
+    line-height: 1; padding: 2px 4px; border-radius: 4px;
+  }
+  .anexo .x:hover { color: var(--warn); background: #1d1210; }
+
+  .acoes { display: flex; gap: 9px; align-items: center; margin-top: 18px; }
+  .erros {
+    background: #1d1210; border: 1px solid #4a2b20; color: #f0a184;
+    border-radius: 8px; padding: 11px 14px; font-size: 13px; margin-top: 14px;
+  }
+  .erros ul { margin: 0; padding-left: 18px; }
+
+  /* tabela */
+  .tbl { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--txt-3); padding: 11px 14px;
+    background: var(--panel-2); border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--panel-2); }
+  td.id { font: 12px var(--mono); color: var(--txt-3); white-space: nowrap; }
+  td.desc small { display: block; color: var(--txt-3); font-size: 11.5px; margin-top: 1px; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; border: 1px solid var(--line); color: var(--txt-2); white-space: nowrap; }
+  .pill.pago { border-color: #23503f; color: var(--ok); }
+  .pill.apagar { border-color: #5c3a2a; color: var(--warn); }
+  .pill.reembolsar { border-color: var(--accent-dim); color: var(--accent); }
+  .linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+  .clipe { color: var(--txt-3); font-size: 11.5px; }
+  .vazio { padding: 44px; text-align: center; color: var(--txt-3); }
+
+  /* sócios */
+  .socios-linhas { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+  .socio-linha { display: flex; gap: 9px; align-items: center; }
+  .socio-linha input.nome { flex: 1; }
+  .socio-linha input.quota { width: 96px; }
+  .resumo-acerto { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--line-soft); font-size: 13px; }
+  .resumo-acerto .l { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; color: var(--txt-2); }
+  .resumo-acerto .l span { font-variant-numeric: tabular-nums; }
+  .resumo-acerto .l .credor { color: var(--ok); }
+  .resumo-acerto .l .devedor { color: var(--warn); }
+
+  /* aviso */
+  #aviso {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 26px; z-index: 50;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--txt);
+    border-radius: 9px; padding: 12px 20px; font-size: 13.5px;
+    box-shadow: 0 10px 34px rgba(0,0,0,.55); display: none; max-width: 90vw;
+  }
+  #aviso.on { display: block; }
+  #aviso.bom { border-color: #23503f; }
+  #aviso.ruim { border-color: #5c3a2a; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <svg class="mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 12h36M24 12v5"/>
+      <path d="M13 22h16a5 5 0 0 1 5 5v4H18a5 5 0 0 1-5-5v-4Z"/>
+      <path d="M34 27h6l-3 4h-3M16 31v5M13 36h8"/>
+    </svg>
+    <div>
+      <div class="org" id="org">—</div>
+      <div class="sub">painel de lançamentos</div>
+    </div>
+    <span class="spacer"></span>
+    <span class="badge" id="badge">—</span>
+    <button class="btn" id="btnPublicar">Publicar</button>
+    <button class="btn btn-ghost" id="btnFechar">Fechar</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ---------- formulário ---------- -->
+  <div class="card">
+    <h2><span id="tituloForm">Novo lançamento</span><span class="tag" id="tagEdicao"></span></h2>
+    <form id="form" autocomplete="off">
+      <div class="grade">
+        <div class="c3">
+          <label for="data">Data</label>
+          <input type="date" id="data" required>
+        </div>
+        <div class="c3">
+          <label for="valor">Valor (R$)</label>
+          <input type="text" id="valor" inputmode="decimal" placeholder="1.234,56" required>
+        </div>
+        <div class="c6">
+          <label for="descricao">Descrição</label>
+          <input type="text" id="descricao" placeholder="Consultoria para certificação RBAC 135" required>
+        </div>
+
+        <div class="c5">
+          <label for="categoria">Categoria</label>
+          <input list="lCategorias" id="categoria" placeholder="escolha ou digite uma nova" required>
+          <datalist id="lCategorias"></datalist>
+        </div>
+        <div class="c4">
+          <label for="fornecedor">Fornecedor <span class="op">· opcional</span></label>
+          <input type="text" id="fornecedor" placeholder="Aero Consult Ltda">
+        </div>
+        <div class="c3">
+          <label for="cnpj">CNPJ / CPF <span class="op">· opcional</span></label>
+          <input type="text" id="cnpj" placeholder="12.345.678/0001-90">
+        </div>
+
+        <div class="c3">
+          <label for="tipoDoc">Documento</label>
+          <input list="lDocs" id="tipoDoc" value="NF-e">
+          <datalist id="lDocs">
+            <option>NF-e</option><option>NFS-e</option><option>GRU</option>
+            <option>Recibo</option><option>Boleto</option><option>Apólice</option><option>Contrato</option>
+          </datalist>
+        </div>
+        <div class="c2">
+          <label for="numDoc">Nº <span class="op">· opcional</span></label>
+          <input type="text" id="numDoc" placeholder="1042">
+        </div>
+        <div class="c3">
+          <label for="pagador">Quem pagou</label>
+          <input list="lPagadores" id="pagador" placeholder="escolha ou digite" required>
+          <datalist id="lPagadores"></datalist>
+        </div>
+        <div class="c2">
+          <label for="forma">Forma</label>
+          <input list="lFormas" id="forma" placeholder="PIX">
+          <datalist id="lFormas"></datalist>
+        </div>
+        <div class="c2">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="pago">pago</option>
+            <option value="a pagar">a pagar</option>
+            <option value="reembolsar">reembolsar</option>
+          </select>
+        </div>
+
+        <div class="c12" id="blocoRateio">
+          <label>Como dividir entre os sócios</label>
+          <div class="opcoes" id="opcoesRateio"></div>
+          <div id="rateioCustom">
+            <div class="pcts" id="pcts"></div>
+          </div>
+        </div>
+
+        <div class="c12">
+          <label for="obs">Observação <span class="op">· opcional</span></label>
+          <textarea id="obs" placeholder="Primeira parcela de três"></textarea>
+        </div>
+
+        <div class="c12">
+          <label>Nota fiscal <span class="op">· PDF ou foto, opcional</span></label>
+          <div class="zona" id="zona">
+            <b>Arraste a nota aqui</b> ou clique para escolher
+          </div>
+          <input type="file" id="arquivo" multiple class="oculto"
+                 accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xml,.txt">
+          <div class="anexos" id="anexos"></div>
+        </div>
+      </div>
+
+      <div id="erros"></div>
+
+      <div class="acoes">
+        <button class="btn" type="submit" id="btnSalvar">Salvar lançamento</button>
+        <button class="btn btn-ghost" type="button" id="btnLimpar">Limpar</button>
+        <span class="spacer"></span>
+        <button class="btn btn-perigo btn-mini oculto" type="button" id="btnCancelar">Cancelar edição</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ---------- lista ---------- -->
+  <div class="card">
+    <h2>Lançamentos <span class="tag" id="contagem"></span></h2>
+    <div class="tbl">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>Data</th><th>Descrição</th><th>Pagador</th>
+            <th>Status</th><th class="num">Valor</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="corpo"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ---------- sócios ---------- -->
+  <div class="card">
+    <h2>Sócios e quotas</h2>
+    <div class="socios-linhas" id="sociosLinhas"></div>
+    <div class="acoes" style="margin-top:0">
+      <button class="btn btn-ghost btn-mini" type="button" id="btnAddSocio">+ sócio</button>
+      <button class="btn btn-mini" type="button" id="btnSalvarSocios">Salvar quotas</button>
+      <span class="soma" id="somaQuotas"></span>
+    </div>
+    <div class="resumo-acerto" id="resumoAcerto"></div>
+  </div>
+
+</div>
+
+<div id="aviso"></div>
+
+<script>
+const TOKEN = '__TOKEN__';
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const brl = (n) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const dataBR = (iso) => (iso || '').split('-').reverse().join('/');
+const tamanho = (b) => !b ? '' : b < 1024 ? b + ' B' : b < 1048576 ? (b/1024).toFixed(0) + ' KB' : (b/1048576).toFixed(1) + ' MB';
+
+let EST = null;          // estado vindo do servidor
+let ANEXOS = [];         // anexos do formulário em edição
+let EDITANDO = null;     // id sendo editado, ou null
+
+async function api(rota, corpo) {
+  const r = await fetch(rota, {
+    method: corpo === undefined ? 'GET' : 'POST',
+    headers: { 'x-heli-token': TOKEN, ...(corpo !== undefined && { 'content-type': 'application/json' }) },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ erro: 'Falha na comunicação com o painel.' }));
+    throw new Error(e.erro || (e.erros || []).join(' ') || 'Erro inesperado.');
+  }
+  return r.json();
+}
+
+let avisoTimer;
+function aviso(texto, tipo = '') {
+  const el = $('#aviso');
+  el.textContent = texto;
+  el.className = 'on ' + tipo;
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => el.className = '', tipo === 'ruim' ? 7000 : 4000);
+}
+
+// ---------------------------------------------------------------- carregar
+
+async function carregar() {
+  EST = await api('/api/estado');
+  $('#org').textContent = EST.org;
+  document.title = EST.org + ' — Painel';
+  preencherDatalist('#lCategorias', EST.categorias);
+  preencherDatalist('#lPagadores', EST.pagadores);
+  preencherDatalist('#lFormas', EST.formas);
+  montarRateioOpcoes();
+  montarTabela();
+  montarSocios();
+  atualizarBadge();
+}
+
+const preencherDatalist = (sel, vals) =>
+  $(sel).innerHTML = (vals || []).map((v) => `<option value="${esc(v)}">`).join('');
+
+function atualizarBadge() {
+  const p = EST.pendencias || {};
+  const n = (p.arquivos || 0) + (p.commitsNaoEnviados || 0);
+  const b = $('#badge');
+  b.textContent = n ? 'alterações não publicadas' : 'tudo publicado';
+  b.className = 'badge' + (n ? ' pend' : '');
+  $('#btnPublicar').disabled = !n;
+}
+
+// ---------------------------------------------------------------- rateio
+
+function montarRateioOpcoes() {
+  const socios = EST?.socios || [];
+  if (!socios.length) { $('#blocoRateio').classList.add('oculto'); return; }
+  $('#blocoRateio').classList.remove('oculto');
+
+  const quotas = socios.map((s) => `${s.nome} ${s.quota}%`).join(' · ');
+  $('#opcoesRateio').innerHTML = [
+    ['quotas', `Pelas quotas (${quotas})`],
+    ['custom', 'Percentuais só deste lançamento'],
+    ['pagador', 'Inteira para quem pagou'],
+  ].map(([v, t], i) => `
+    <label class="opcao${i === 0 ? ' ativa' : ''}">
+      <input type="radio" name="modoRateio" value="${v}"${i === 0 ? ' checked' : ''}> ${esc(t)}
+    </label>`).join('');
+
+  $('#rateioCustom').classList.remove('on');   // volta fechado sempre que o form é remontado
+  $('#pcts').innerHTML = socios.map((s) => `
+    <div class="pct">
+      <label>${esc(s.nome)}</label>
+      <input type="number" class="pctIn" data-socio="${esc(s.nome)}" min="0" max="100" step="0.01" value="${s.quota}">
+    </div>`).join('') + '<div class="soma" id="somaPct"></div>';
+
+  $$('input[name="modoRateio"]').forEach((r) => r.addEventListener('change', () => {
+    $$('.opcao').forEach((o) => o.classList.toggle('ativa', o.querySelector('input').checked));
+    $('#rateioCustom').classList.toggle('on', r.value === 'custom' && r.checked);
+    somarPct();
+  }));
+  $$('.pctIn').forEach((i) => i.addEventListener('input', somarPct));
+  somarPct();
+}
+
+function somarPct() {
+  const el = $('#somaPct');
+  if (!el) return;
+  const s = Math.round($$('.pctIn').reduce((a, i) => a + (Number(i.value) || 0), 0) * 100) / 100;
+  el.textContent = `soma ${s}%`;
+  el.className = 'soma ' + (s === 100 ? 'ok' : 'ruim');
+}
+
+function rateioDoForm() {
+  const modo = $('input[name="modoRateio"]:checked')?.value;
+  if (!modo || modo === 'quotas') return null;
+  if (modo === 'pagador') return [{ socio: $('#pagador').value.trim(), pct: 100 }];
+  return $$('.pctIn')
+    .map((i) => ({ socio: i.dataset.socio, pct: Number(i.value) || 0 }))
+    .filter((r) => r.pct > 0);
+}
+
+// ---------------------------------------------------------------- anexos
+
+function pintarAnexos() {
+  $('#anexos').innerHTML = ANEXOS.map((a, i) => `
+    <span class="anexo">
+      ${a.arquivo
+        ? `<a href="/api/anexo?arquivo=${encodeURIComponent(a.arquivo)}&k=${TOKEN}" target="_blank">${esc(a.nome)}</a>`
+        : esc(a.nome)}
+      <span style="color:var(--txt-3)">${tamanho(a.tamanho)}</span>
+      <button type="button" class="x" data-i="${i}" title="remover">&times;</button>
+    </span>`).join('');
+  $$('#anexos .x').forEach((b) => b.addEventListener('click', () => {
+    ANEXOS.splice(Number(b.dataset.i), 1);
+    pintarAnexos();
+  }));
+}
+
+function lerArquivos(lista) {
+  for (const f of lista) {
+    if (f.size > 20 * 1024 * 1024) { aviso(`"${f.name}" passa de 20 MB e foi ignorado.`, 'ruim'); continue; }
+    const fr = new FileReader();
+    fr.onload = () => {
+      ANEXOS.push({
+        nome: f.name, mime: f.type || 'application/octet-stream', tamanho: f.size,
+        dataB64: String(fr.result).split(',')[1],
+      });
+      pintarAnexos();
+    };
+    fr.readAsDataURL(f);
+  }
+}
+
+$('#zona').addEventListener('click', () => $('#arquivo').click());
+$('#arquivo').addEventListener('change', (e) => { lerArquivos(e.target.files); e.target.value = ''; });
+['dragenter', 'dragover'].forEach((ev) => $('#zona').addEventListener(ev, (e) => {
+  e.preventDefault(); $('#zona').classList.add('sobre');
+}));
+['dragleave', 'drop'].forEach((ev) => $('#zona').addEventListener(ev, (e) => {
+  e.preventDefault(); $('#zona').classList.remove('sobre');
+}));
+$('#zona').addEventListener('drop', (e) => lerArquivos(e.dataTransfer.files));
+// o navegador abriria o arquivo solto fora da zona; barra isso
+['dragover', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault()));
+
+// ---------------------------------------------------------------- formulário
+
+function limpar() {
+  $('#form').reset();
+  $('#data').value = new Date().toISOString().slice(0, 10);
+  $('#tipoDoc').value = 'NF-e';
+  ANEXOS = [];
+  EDITANDO = null;
+  pintarAnexos();
+  $('#erros').innerHTML = '';
+  $('#tituloForm').textContent = 'Novo lançamento';
+  $('#tagEdicao').textContent = '';
+  $('#btnSalvar').textContent = 'Salvar lançamento';
+  $('#btnCancelar').classList.add('oculto');
+  $$('.campo-erro').forEach((e) => e.classList.remove('campo-erro'));
+  montarRateioOpcoes();
+}
+
+function editar(id) {
+  const l = EST.lancamentos.find((x) => x.id === id);
+  if (!l) return;
+  EDITANDO = id;
+  $('#data').value = l.data;
+  $('#valor').value = l.valor.toFixed(2).replace('.', ',');
+  $('#descricao').value = l.descricao;
+  $('#categoria').value = l.categoria;
+  $('#fornecedor').value = l.fornecedor || '';
+  $('#cnpj').value = l.cnpj || '';
+  $('#tipoDoc').value = l.documento?.tipo || '';
+  $('#numDoc').value = l.documento?.numero || '';
+  $('#pagador').value = l.pagador;
+  $('#forma').value = l.forma || '';
+  $('#status').value = l.status;
+  $('#obs').value = l.obs || '';
+  ANEXOS = (l.anexos || []).map((a) => ({ ...a }));
+  pintarAnexos();
+
+  if ((EST.socios || []).length) {
+    const modo = Array.isArray(l.rateio) && l.rateio.length ? 'custom' : 'quotas';
+    const alvo = $(`input[name="modoRateio"][value="${modo}"]`);
+    if (alvo) { alvo.checked = true; alvo.dispatchEvent(new Event('change')); }
+    if (modo === 'custom') {
+      $$('.pctIn').forEach((i) => {
+        const r = l.rateio.find((x) => x.socio === i.dataset.socio);
+        i.value = r ? r.pct : 0;
+      });
+      somarPct();
+    }
+  }
+
+  $('#tituloForm').textContent = 'Editando';
+  $('#tagEdicao').textContent = l.id;
+  $('#btnSalvar').textContent = 'Salvar alterações';
+  $('#btnCancelar').classList.remove('oculto');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+$('#form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#erros').innerHTML = '';
+  $$('.campo-erro').forEach((el) => el.classList.remove('campo-erro'));
+  $('#btnSalvar').disabled = true;
+
+  try {
+    const r = await api('/api/lancamento', {
+      id: EDITANDO,
+      data: $('#data').value,
+      valor: $('#valor').value,
+      descricao: $('#descricao').value,
+      categoria: $('#categoria').value.trim(),
+      fornecedor: $('#fornecedor').value,
+      cnpj: $('#cnpj').value,
+      tipoDoc: $('#tipoDoc').value,
+      numDoc: $('#numDoc').value,
+      pagador: $('#pagador').value.trim(),
+      forma: $('#forma').value.trim(),
+      status: $('#status').value,
+      rateio: rateioDoForm(),
+      obs: $('#obs').value,
+      anexos: ANEXOS,
+    });
+
+    if (!r.ok) {
+      $('#erros').innerHTML = `<div class="erros"><ul>${r.erros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+      return;
+    }
+    const editado = r.editado;
+    limpar();
+    await carregar();
+    aviso(editado ? `${r.id} atualizado.` : `${r.id} lançado. Clique em Publicar quando quiser subir.`, 'bom');
+  } catch (err) {
+    aviso(err.message, 'ruim');
+  } finally {
+    $('#btnSalvar').disabled = false;
+  }
+});
+
+$('#btnLimpar').addEventListener('click', limpar);
+$('#btnCancelar').addEventListener('click', limpar);
+
+// ---------------------------------------------------------------- tabela
+
+function montarTabela() {
+  const L = EST.lancamentos || [];
+  $('#contagem').textContent = L.length ? `${L.length} · ${brl(L.reduce((s, l) => s + l.valor, 0))}` : '';
+  const tb = $('#corpo');
+  if (!L.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="vazio">Nenhum lançamento ainda. Preencha o formulário acima.</td></tr>';
+    return;
+  }
+  tb.innerHTML = [...L].reverse().map((l) => `
+    <tr>
+      <td class="id">${esc(l.id)}</td>
+      <td style="white-space:nowrap">${dataBR(l.data)}</td>
+      <td class="desc">${esc(l.descricao)}
+        <small>${esc(l.categoria)}${l.fornecedor ? ' · ' + esc(l.fornecedor) : ''}${l.anexos?.length ? ` <span class="clipe">· ${l.anexos.length} anexo(s)</span>` : ''}</small>
+      </td>
+      <td>${esc(l.pagador)}</td>
+      <td><span class="pill ${esc((l.status || '').replace(' ', ''))}">${esc(l.status)}</span></td>
+      <td class="num">${brl(l.valor)}</td>
+      <td>
+        <div class="linha-acoes">
+          <button class="btn btn-ghost btn-mini" data-editar="${esc(l.id)}">Editar</button>
+          <button class="btn btn-perigo btn-mini" data-apagar="${esc(l.id)}">Apagar</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  $$('[data-editar]').forEach((b) => b.addEventListener('click', () => editar(b.dataset.editar)));
+  $$('[data-apagar]').forEach((b) => b.addEventListener('click', async () => {
+    const l = EST.lancamentos.find((x) => x.id === b.dataset.apagar);
+    if (!confirm(`Apagar ${l.id} — ${l.descricao} (${brl(l.valor)})?\n\nOs anexos deste lançamento também são removidos.`)) return;
+    try {
+      await api('/api/apagar', { id: b.dataset.apagar });
+      if (EDITANDO === b.dataset.apagar) limpar();
+      await carregar();
+      aviso('Lançamento apagado.', 'bom');
+    } catch (err) { aviso(err.message, 'ruim'); }
+  }));
+}
+
+// ---------------------------------------------------------------- sócios
+
+function linhaSocio(nome = '', quota = '') {
+  const d = document.createElement('div');
+  d.className = 'socio-linha';
+  d.innerHTML = `
+    <input type="text" class="nome" placeholder="nome do sócio" value="${esc(nome)}">
+    <input type="number" class="quota" min="0" max="100" step="0.01" placeholder="%" value="${quota}">
+    <button type="button" class="btn btn-perigo btn-mini">remover</button>`;
+  d.querySelector('button').addEventListener('click', () => { d.remove(); somarQuotas(); });
+  d.querySelectorAll('input').forEach((i) => i.addEventListener('input', somarQuotas));
+  return d;
+}
+
+function montarSocios() {
+  const c = $('#sociosLinhas');
+  c.innerHTML = '';
+  const socios = EST.socios || [];
+  if (!socios.length) c.appendChild(linhaSocio());
+  else socios.forEach((s) => c.appendChild(linhaSocio(s.nome, s.quota)));
+  somarQuotas();
+  pintarAcerto();
+}
+
+function somarQuotas() {
+  const s = Math.round($$('#sociosLinhas .quota').reduce((a, i) => a + (Number(i.value) || 0), 0) * 100) / 100;
+  const el = $('#somaQuotas');
+  const vazio = !$$('#sociosLinhas .nome').some((i) => i.value.trim());
+  el.textContent = vazio ? 'sem sócios — o rateio fica desligado' : `soma ${s}%`;
+  el.className = 'soma ' + (vazio ? '' : s === 100 ? 'ok' : 'ruim');
+}
+
+$('#btnAddSocio').addEventListener('click', () => { $('#sociosLinhas').appendChild(linhaSocio()); somarQuotas(); });
+
+$('#btnSalvarSocios').addEventListener('click', async () => {
+  const socios = $$('#sociosLinhas .socio-linha')
+    .map((d) => ({ nome: d.querySelector('.nome').value.trim(), quota: Number(d.querySelector('.quota').value) }))
+    .filter((s) => s.nome);
+  if (socios.length && socios.some((s) => !Number.isFinite(s.quota))) {
+    return aviso('Cada sócio precisa de uma quota em %.', 'ruim');
+  }
+  const soma = Math.round(socios.reduce((a, s) => a + s.quota, 0) * 100) / 100;
+  if (socios.length && soma !== 100 &&
+      !confirm(`As quotas somam ${soma}%, não 100%.\n\nO rateio divide na proporção informada. Gravar assim?`)) return;
+  try {
+    await api('/api/socios', { socios });
+    await carregar();
+    aviso('Quotas gravadas. O rateio de todo o histórico foi recalculado.', 'bom');
+  } catch (err) { aviso(err.message, 'ruim'); }
+});
+
+function pintarAcerto() {
+  const r = EST.rateio;
+  const el = $('#resumoAcerto');
+  if (!r || !r.posicoes?.length) { el.innerHTML = ''; return; }
+  const linhas = r.posicoes.map((p) => {
+    const cls = p.saldo > 0.004 ? 'credor' : p.saldo < -0.004 ? 'devedor' : '';
+    const rot = cls === 'credor' ? 'a receber' : cls === 'devedor' ? 'a pagar' : 'em dia';
+    return `<div class="l"><span>${esc(p.socio)}${p.externo ? ' (não sócio)' : ''} — ${rot}</span>
+            <span class="${cls}">${brl(Math.abs(p.saldo))}</span></div>`;
+  }).join('');
+  const acertos = r.acertos.length
+    ? r.acertos.map((a) => `<div class="l"><span>${esc(a.de)} paga a ${esc(a.para)}</span><span>${brl(a.valor)}</span></div>`).join('')
+    : '<div class="l"><span>Contas equilibradas.</span><span></span></div>';
+  el.innerHTML = linhas + '<div style="height:10px"></div>' + acertos;
+}
+
+// ---------------------------------------------------------------- publicar
+
+$('#btnPublicar').addEventListener('click', async () => {
+  const b = $('#btnPublicar');
+  b.disabled = true;
+  b.textContent = 'Publicando…';
+  try {
+    const r = await api('/api/publicar', {});
+    aviso(r.mensagem, r.ok ? 'bom' : 'ruim');
+    await carregar();
+  } catch (err) {
+    aviso(err.message, 'ruim');
+  } finally {
+    b.textContent = 'Publicar';
+  }
+});
+
+$('#btnFechar').addEventListener('click', async () => {
+  if (!confirm('Fechar o painel? O servidor local é encerrado.')) return;
+  try { await api('/api/encerrar', {}); } catch {}
+  document.body.innerHTML =
+    '<div style="padding:80px;text-align:center;color:#5f7186">Painel encerrado. Pode fechar esta aba.</div>';
+});
+
+// ---------------------------------------------------------------- início
+
+// carrega o estado antes de montar o formulário — as opções de rateio dependem dele
+carregar()
+  .then(limpar)
+  .catch((e) => aviso('Não foi possível carregar o painel: ' + e.message, 'ruim'));
+</script>
+</body>
+</html>
