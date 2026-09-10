@@ -165,6 +165,32 @@
   .pill.reembolsar { border-color: var(--accent-dim); color: var(--accent); }
   .linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
   .clipe { color: var(--txt-3); font-size: 11.5px; }
+  /* caixa de entrada */
+  .entrada-vazia { color: var(--txt-3); font-size: 13px; }
+  .entrada-config { display: flex; gap: 9px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
+  .entrada-config .campo { flex: 1 1 380px; }
+  .entrada-pasta {
+    font-size: 12px; color: var(--txt-3); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .entrada-pasta code {
+    font-family: var(--mono); font-size: 11.5px; color: var(--txt-2);
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 5px; padding: 3px 8px;
+  }
+  .itens { display: flex; flex-direction: column; gap: 9px; }
+  .item {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 15px;
+  }
+  .item .nome { font-weight: 500; font-size: 13.5px; }
+  .item .meta { font-size: 11.5px; color: var(--txt-3); margin-top: 2px; }
+  .item .lido { font-size: 12px; color: var(--ok); margin-top: 4px; }
+  .item .lido.nada { color: var(--txt-3); }
+  .item .corpo { flex: 1 1 260px; min-width: 0; }
+  .item .botoes { display: flex; gap: 7px; }
+
   /* leitura de nota */
   .chave-status { font-size: 12px; margin-top: 6px; min-height: 16px; color: var(--txt-3); }
   .chave-status.ok { color: var(--ok); }
@@ -231,6 +257,12 @@
 </header>
 
 <div class="wrap">
+
+  <!-- ---------- caixa de entrada ---------- -->
+  <div class="card" id="cardEntrada">
+    <h2>Caixa de entrada <span class="tag" id="contagemEntrada"></span></h2>
+    <div id="entradaConteudo"></div>
+  </div>
 
   <!-- ---------- formulário ---------- -->
   <div class="card">
@@ -695,6 +727,7 @@ function limpar() {
   $('#tipoDoc').dataset.padrao = 'NF-e';
   ANEXOS = [];
   EDITANDO = null;
+  ORIGEM_ENTRADA = null;
   pintarAnexos();
   $('#erros').innerHTML = '';
   $('#leitura').innerHTML = '';
@@ -780,8 +813,14 @@ $('#form').addEventListener('submit', async (e) => {
       return;
     }
     const editado = r.editado;
+    const veioDaEntrada = ORIGEM_ENTRADA;
+    if (veioDaEntrada) {
+      // o original nao e apagado: vai para "processadas", preservando a trilha
+      await api('/api/entrada/arquivar', { nome: veioDaEntrada, destino: 'processadas' }).catch(() => {});
+    }
     limpar();
     await carregar();
+    if (veioDaEntrada) await carregarEntrada();
     aviso(editado ? `${r.id} atualizado.` : `${r.id} lançado. Clique em Publicar quando quiser subir.`, 'bom');
   } catch (err) {
     aviso(err.message, 'ruim');
@@ -901,6 +940,127 @@ function pintarAcerto() {
   el.innerHTML = linhas + '<div style="height:10px"></div>' + acertos;
 }
 
+// ---------------------------------------------------------------- caixa de entrada
+
+let ORIGEM_ENTRADA = null;   // arquivo da entrada que deu origem ao lançamento em edição
+
+async function carregarEntrada() {
+  let e;
+  try { e = await api('/api/entrada'); }
+  catch { $('#entradaConteudo').innerHTML = '<div class="entrada-vazia">Não consegui ler a pasta de entrada.</div>'; return; }
+
+  const cont = $('#entradaConteudo');
+  $('#contagemEntrada').textContent = e.ativa && e.itens.length ? `${e.itens.length} aguardando` : '';
+
+  if (!e.ativa) {
+    cont.innerHTML = `
+      <div class="entrada-vazia">
+        ${e.erro ? esc(e.erro) + '<br>' : ''}
+        Aponte para uma pasta onde outras pessoas possam deixar notas — uma pasta
+        compartilhada do OneDrive funciona bem, inclusive pelo celular.
+        O que chegar aparece aqui para você conferir antes de virar lançamento.
+      </div>
+      <div class="entrada-config">
+        <div class="campo">
+          <label for="pastaEntrada">Caminho da pasta</label>
+          <input type="text" id="pastaEntrada" spellcheck="false"
+                 value="${esc(e.pasta || '')}"
+                 placeholder="C:\\Users\\braga\\OneDrive\\Heli - Notas a lancar">
+        </div>
+        <button class="btn btn-mini" type="button" id="btnPasta">Usar esta pasta</button>
+      </div>`;
+    $('#btnPasta').addEventListener('click', salvarPasta);
+    return;
+  }
+
+  const cabecalho = `
+    <div class="entrada-pasta">
+      <span>lendo de</span><code>${esc(e.pasta)}</code>
+      <button class="btn btn-ghost btn-mini" type="button" id="btnAtualizarEntrada">atualizar</button>
+      <button class="btn btn-ghost btn-mini" type="button" id="btnTrocarPasta">trocar pasta</button>
+    </div>`;
+
+  cont.innerHTML = cabecalho + (e.itens.length
+    ? `<div class="itens">${e.itens.map(itemHtml).join('')}</div>`
+    : '<div class="entrada-vazia">Nada aguardando. O que for depositado nessa pasta aparece aqui.</div>');
+
+  $('#btnAtualizarEntrada').addEventListener('click', carregarEntrada);
+  $('#btnTrocarPasta').addEventListener('click', async () => {
+    const nova = prompt('Caminho da pasta de entrada (vazio desliga a caixa de entrada):', e.pasta);
+    if (nova === null) return;
+    await salvarPasta(nova);
+  });
+  $$('[data-lancar]').forEach((b) => b.addEventListener('click', () => lancarDaEntrada(b.dataset.lancar)));
+  $$('[data-descartar]').forEach((b) => b.addEventListener('click', () => descartarDaEntrada(b.dataset.descartar)));
+}
+
+function itemHtml(it) {
+  const l = it.leitura || {};
+  let lido = '<span class="lido nada">sem leitura automática — preencha à mão</span>';
+  if (l.pendenteNoNavegador) {
+    lido = '<span class="lido nada">imagem — leio o QR Code ao lançar</span>';
+  } else if (!l.erro && (l.nomeEmitente || l.valor != null || l.numero)) {
+    const partes = [
+      l.nomeEmitente,
+      l.valor != null ? brl(l.valor) : null,
+      l.numero ? `nº ${l.numero}` : null,
+    ].filter(Boolean);
+    lido = `<span class="lido">${esc(partes.join(' · '))}</span>`;
+  } else if (l.erro) {
+    lido = `<span class="lido nada">${esc(l.erro.slice(0, 90))}</span>`;
+  }
+
+  const quando = new Date(it.recebidoEm);
+  return `
+    <div class="item">
+      <div class="corpo">
+        <div class="nome">${esc(it.nome)}</div>
+        <div class="meta">${tamanho(it.tamanho)} · recebido em ${quando.toLocaleDateString('pt-BR')} ${quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+        <div>${lido}</div>
+      </div>
+      <div class="botoes">
+        <a class="btn btn-ghost btn-mini" href="/api/entrada/arquivo?nome=${encodeURIComponent(it.nome)}&k=${TOKEN}" target="_blank">ver</a>
+        <button class="btn btn-mini" type="button" data-lancar="${esc(it.nome)}">Lançar</button>
+        <button class="btn btn-perigo btn-mini" type="button" data-descartar="${esc(it.nome)}">Descartar</button>
+      </div>
+    </div>`;
+}
+
+async function salvarPasta(valor) {
+  const pasta = typeof valor === 'string' ? valor : ($('#pastaEntrada')?.value || '');
+  try {
+    const r = await api('/api/entrada/pasta', { pasta });
+    if (!r.ok) return aviso(r.erro, 'ruim');
+    aviso(r.desligada ? 'Caixa de entrada desligada.' : 'Pasta de entrada configurada.', 'bom');
+    await carregarEntrada();
+    await carregar();
+  } catch (err) { aviso(err.message, 'ruim'); }
+}
+
+/** Traz o arquivo para o formulário: anexa, lê o que der, e marca a origem. */
+async function lancarDaEntrada(nome) {
+  try {
+    const r = await fetch(`/api/entrada/arquivo?nome=${encodeURIComponent(nome)}&k=${TOKEN}`);
+    if (!r.ok) return aviso('Não consegui abrir esse arquivo.', 'ruim');
+    const blob = await r.blob();
+    limpar();
+    await lerArquivos([new File([blob], nome, { type: blob.type })]);
+    ORIGEM_ENTRADA = nome;
+    $('#tituloForm').textContent = 'Lançando da caixa de entrada';
+    $('#tagEdicao').textContent = nome;
+    window.scrollTo({ top: $('#form').offsetTop - 80, behavior: 'smooth' });
+  } catch (err) { aviso(err.message, 'ruim'); }
+}
+
+async function descartarDaEntrada(nome) {
+  if (!confirm(`Descartar "${nome}"?\n\nO arquivo não é apagado — vai para a subpasta "descartadas".`)) return;
+  try {
+    await api('/api/entrada/arquivar', { nome, destino: 'descartadas' });
+    await carregarEntrada();
+    aviso('Movido para "descartadas".', 'bom');
+  } catch (err) { aviso(err.message, 'ruim'); }
+}
+
 // ---------------------------------------------------------------- publicar
 
 $('#btnPublicar').addEventListener('click', async () => {
@@ -930,6 +1090,7 @@ $('#btnFechar').addEventListener('click', async () => {
 // carrega o estado antes de montar o formulário — as opções de rateio dependem dele
 carregar()
   .then(limpar)
+  .then(carregarEntrada)
   .catch((e) => aviso('Não foi possível carregar o painel: ' + e.message, 'ruim'));
 </script>
 </body>

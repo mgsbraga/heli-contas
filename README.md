@@ -89,6 +89,57 @@ pode arrastar o arquivo para dentro da janela do terminal.
 
 ---
 
+## Caixa de entrada — notas de outras pessoas
+
+Você é o único que publica, mas não precisa ser o único que junta as notas.
+
+Aponte o painel para uma pasta e qualquer coisa depositada nela aparece na
+**Caixa de entrada**, já lida, esperando sua conferência. Nada entra no ledger sem
+você mandar lançar.
+
+```
+node heli.mjs painel   →   Caixa de entrada   →   informe o caminho da pasta
+```
+
+### Como as outras pessoas depositam
+
+Use uma pasta do OneDrive e compartilhe conforme quem vai mandar:
+
+- **Sócios e pessoas de confiança** — compartilhe a pasta com edição. Eles largam o
+  XML ou a foto de onde estiverem, inclusive pelo aplicativo do celular.
+- **Fornecedores e terceiros** — use o recurso *Solicitar arquivos* do OneDrive, que
+  gera um link de envio: quem tem o link consegue mandar arquivo, mas não consegue
+  ver o que já está lá. Ninguém precisa de conta nem de senha do sistema.
+
+### O que acontece com cada arquivo
+
+O painel lista o que chegou, com tamanho e data de recebimento, e já aplica a leitura
+automática — em XML e PDF na hora, e no caso de imagem lê o QR Code quando você clica
+em Lançar. Arquivos que não sejam nota (`.docx`, planilha, etc.) são simplesmente
+ignorados.
+
+Em cada item você tem três saídas:
+
+| Botão | O que faz |
+|---|---|
+| **ver** | Abre o arquivo para você conferir antes de decidir |
+| **Lançar** | Leva para o formulário, já anexado e preenchido com o que deu para ler |
+| **Descartar** | Tira da fila sem lançar |
+
+**Nada é apagado.** Depois de lançado, o original vai para a subpasta `processadas`;
+descartado, vai para `descartadas`. A trilha de quem mandou o quê e quando fica
+preservada na própria pasta.
+
+### Por que não um formulário na internet
+
+Um formulário público exigiria servidor, banco e contas de usuário — e os seus dados
+deixariam de ser ilegíveis para quem hospeda. A pasta compartilhada resolve a mesma
+necessidade sem abrir mão disso. Quando a operação exigir que cada sócio lance
+sozinho, com acesso próprio e trilha de auditoria, aí sim vale a conversa sobre
+migrar para uma arquitetura com backend.
+
+---
+
 ## Leitura automática da nota
 
 Nada aqui usa IA nem OCR. São três leituras determinísticas: ou o dado é lido com
