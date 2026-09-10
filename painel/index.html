@@ -165,6 +165,25 @@
   .pill.reembolsar { border-color: var(--accent-dim); color: var(--accent); }
   .linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
   .clipe { color: var(--txt-3); font-size: 11.5px; }
+  /* leitura de nota */
+  .chave-status { font-size: 12px; margin-top: 6px; min-height: 16px; color: var(--txt-3); }
+  .chave-status.ok { color: var(--ok); }
+  .chave-status.ruim { color: var(--warn); }
+  #leitura:empty { display: none; }
+  .leitura {
+    margin-top: 11px; border-radius: 8px; padding: 12px 15px; font-size: 12.5px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--txt-2);
+  }
+  .leitura.ok { border-color: #23503f; }
+  .leitura.aviso { border-color: #5c3a2a; }
+  .leitura b { color: var(--txt); font-weight: 600; }
+  .leitura .campos { margin-top: 6px; color: var(--txt-3); }
+  .leitura .campos code {
+    font-family: var(--mono); font-size: 11.5px; color: var(--accent);
+    background: transparent; margin-right: 10px; white-space: nowrap;
+  }
+  .lendo { color: var(--txt-3); font-size: 12.5px; margin-top: 10px; }
+
   .vazio { padding: 44px; text-align: center; color: var(--txt-3); }
 
   /* sócios */
@@ -276,6 +295,13 @@
           </select>
         </div>
 
+        <div class="c12">
+          <label for="chave">Chave de acesso <span class="op">· 44 dígitos, opcional — cole e o resto se preenche</span></label>
+          <input type="text" id="chave" inputmode="numeric" spellcheck="false"
+                 placeholder="4317 1207 3646 1700 0135 5500 0000 0120 1410 0012 0146">
+          <div id="chaveStatus" class="chave-status"></div>
+        </div>
+
         <div class="c12" id="blocoRateio">
           <label>Como dividir entre os sócios</label>
           <div class="opcoes" id="opcoesRateio"></div>
@@ -292,10 +318,12 @@
         <div class="c12">
           <label>Nota fiscal <span class="op">· PDF ou foto, opcional</span></label>
           <div class="zona" id="zona">
-            <b>Arraste a nota aqui</b> ou clique para escolher
+            <b>Arraste a nota aqui</b> ou clique para escolher<br>
+            <span style="font-size:12px">XML preenche o formulário inteiro · foto do DANFE lê o QR Code</span>
           </div>
           <input type="file" id="arquivo" multiple class="oculto"
                  accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xml,.txt">
+          <div id="leitura"></div>
           <div class="anexos" id="anexos"></div>
         </div>
       </div>
@@ -343,6 +371,7 @@
 
 <div id="aviso"></div>
 
+<script src="vendor/jsQR.js"></script>
 <script>
 const TOKEN = '__TOKEN__';
 const $ = (s) => document.querySelector(s);
@@ -472,20 +501,177 @@ function pintarAnexos() {
   }));
 }
 
-function lerArquivos(lista) {
+const comoB64 = (f) => new Promise((res, rej) => {
+  const fr = new FileReader();
+  fr.onload = () => res(String(fr.result).split(',')[1]);
+  fr.onerror = rej;
+  fr.readAsDataURL(f);
+});
+
+async function lerArquivos(lista) {
   for (const f of lista) {
     if (f.size > 20 * 1024 * 1024) { aviso(`"${f.name}" passa de 20 MB e foi ignorado.`, 'ruim'); continue; }
-    const fr = new FileReader();
-    fr.onload = () => {
-      ANEXOS.push({
-        nome: f.name, mime: f.type || 'application/octet-stream', tamanho: f.size,
-        dataB64: String(fr.result).split(',')[1],
-      });
-      pintarAnexos();
-    };
-    fr.readAsDataURL(f);
+    const b64 = await comoB64(f);
+    ANEXOS.push({ nome: f.name, mime: f.type || 'application/octet-stream', tamanho: f.size, dataB64: b64 });
+    pintarAnexos();
+    await lerNotaDoArquivo(f, b64);
   }
 }
+
+// ---------------------------------------------------------------- leitura da nota
+
+/**
+ * Decodifica o QR Code de uma foto do DANFE. É geometria e correção de erro
+ * Reed-Solomon, não reconhecimento de imagem — ou o código está legível, ou não
+ * sai nada. Nunca "quase certo".
+ */
+async function qrDaImagem(file) {
+  if (typeof jsQR !== 'function') return null;
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return null;
+  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+  // tenta algumas escalas: foto de celular costuma ser grande demais para o
+  // detector, e reduzir demais apaga os módulos do código
+  for (const largura of [1400, 900, 2000]) {
+    const escala = Math.min(1, largura / Math.max(bitmap.width, bitmap.height));
+    ctx.canvas.width = Math.max(1, Math.round(bitmap.width * escala));
+    ctx.canvas.height = Math.max(1, Math.round(bitmap.height * escala));
+    ctx.drawImage(bitmap, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    const img = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const r = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+    if (r?.data) { bitmap.close?.(); return r.data; }
+  }
+  bitmap.close?.();
+  return null;
+}
+
+async function lerNotaDoArquivo(f, b64) {
+  const ehImagem = /^image\//.test(f.type);
+  const ehXml = /\.xml$/i.test(f.name) || /xml/i.test(f.type);
+  const ehPdf = /\.pdf$/i.test(f.name) || /pdf/i.test(f.type);
+  if (!ehImagem && !ehXml && !ehPdf) return;
+
+  $('#leitura').innerHTML = `<div class="lendo">Lendo ${esc(f.name)}…</div>`;
+  try {
+    let r;
+    if (ehImagem) {
+      const texto = await qrDaImagem(f);
+      if (!texto) {
+        return mostrarLeitura({ erro: 'Não achei QR Code legível nesta imagem. Se a nota tiver o código, tente uma foto mais nítida e reta — ou cole a chave à mão.' }, f.name);
+      }
+      // o QR do DANFE é uma URL que carrega a chave; o servidor a extrai e valida
+      r = await api('/api/lerNota', { chave: (texto.match(/\d{44}/) || [''])[0], nome: f.name });
+      if (r.erro && !/\d{44}/.test(texto)) {
+        return mostrarLeitura({ erro: 'O QR Code foi lido, mas não contém uma chave de acesso de 44 dígitos.' }, f.name);
+      }
+      r.origem = 'qr';
+    } else {
+      r = await api('/api/lerNota', { nome: f.name, mime: f.type, dataB64: b64 });
+    }
+    if (r.erro) return mostrarLeitura(r, f.name);
+    aplicarLeitura(r, f.name);
+  } catch (e) {
+    mostrarLeitura({ erro: e.message }, f.name);
+  }
+}
+
+const ROTULOS = {
+  fornecedor: 'fornecedor', cnpj: 'CNPJ', valor: 'valor', data: 'data',
+  numDoc: 'nº do documento', tipoDoc: 'tipo', chave: 'chave', descricao: 'descrição',
+};
+
+/** Preenche apenas o que está vazio — o que você digitou nunca é sobrescrito. */
+function aplicarLeitura(r, nomeArquivo, revalidar = true) {
+  const preencher = (sel, valor) => {
+    if (valor === null || valor === undefined || valor === '') return null;
+    const el = $(sel);
+    // respeita o que você digitou, mas não o palpite que o próprio formulário
+    // colocou como padrão — a data da nota tem de vencer o "hoje" pré-preenchido
+    if (el.value.trim() && el.value !== el.dataset.padrao) return null;
+    el.value = valor;
+    // no campo da chave o disparo reativaria o próprio validador, que então
+    // reescreveria o aviso desta leitura dizendo que veio de "chave colada"
+    if (sel !== '#chave') el.dispatchEvent(new Event('input', { bubbles: true }));
+    return sel.slice(1);
+  };
+
+  const postos = [
+    preencher('#fornecedor', r.nomeEmitente),
+    preencher('#cnpj', r.cnpjFormatado),
+    preencher('#valor', r.valor != null ? r.valor.toFixed(2).replace('.', ',') : ''),
+    preencher('#data', r.data),
+    preencher('#numDoc', r.numero),
+    preencher('#tipoDoc', r.modelo),
+    preencher('#chave', r.chave),
+    preencher('#descricao', r.descricao),
+  ].filter(Boolean);
+
+  if (revalidar) validarChave();          // só confere; não repreenche
+  mostrarLeitura({ ...r, postos }, nomeArquivo);
+}
+
+const FONTES = {
+  xml: 'XML da nota, com todos os campos vindos do arquivo',
+  pdf: 'chave de acesso achada no texto do PDF',
+  qr: 'QR Code lido da imagem',
+  chave: 'chave de acesso',
+};
+
+function mostrarLeitura(r, nomeArquivo) {
+  const el = $('#leitura');
+  if (r.erro) {
+    el.innerHTML = `<div class="leitura aviso"><b>${esc(nomeArquivo)}</b> ficou anexado, mas sem leitura automática.<br>${esc(r.erro)}</div>`;
+    return;
+  }
+  const campos = (r.postos || []).map((c) => `<code>${esc(ROTULOS[c] || c)}</code>`).join('');
+  const alerta = r.chaveValida === false
+    ? '<br><span style="color:var(--warn)">Atenção: o dígito verificador da chave não bate — confira os números.</span>'
+    : '';
+  el.innerHTML = `<div class="leitura ok">
+      Li de <b>${esc(nomeArquivo)}</b> — ${esc(FONTES[r.origem] || r.origem)}.
+      ${campos ? `<div class="campos">preenchido: ${campos}</div>`
+               : '<div class="campos">nada foi preenchido — os campos já estavam preenchidos por você.</div>'}
+      ${alerta}
+    </div>`;
+}
+
+// ---------------------------------------------------------------- campo da chave
+
+/**
+ * Confere a chave e descreve o documento embaixo do campo.
+ * Só preenche o resto do formulário quando a chave foi digitada por você — se ela
+ * veio de um arquivo, quem preenche é aplicarLeitura, e sobrescrever o aviso dela
+ * faria a tela mentir sobre a origem do dado.
+ */
+function validarChave({ preencher = false } = {}) {
+  const el = $('#chave');
+  const st = $('#chaveStatus');
+  const d = el.value.replace(/\D/g, '');
+  if (!d) { st.textContent = ''; st.className = 'chave-status'; return; }
+  if (d.length !== 44) {
+    st.textContent = `${d.length} de 44 dígitos`;
+    st.className = 'chave-status';
+    return;
+  }
+  api('/api/lerNota', { chave: d }).then((r) => {
+    if (r.erro || r.chaveValida === false) {
+      st.textContent = 'Dígito verificador não confere — há erro de digitação nesta chave.';
+      st.className = 'chave-status ruim';
+      return;
+    }
+    // deixa claro que isto sai dos proprios digitos da chave, nao do corpo da nota
+    st.textContent = `A chave diz: ${r.modelo} nº ${r.numero}, série ${r.serie}`
+      + ` · emitente ${r.cnpjFormatado}`
+      + (r.uf ? ` · ${r.uf}` : '') + (r.competencia ? ` · emitida em ${r.competencia}` : '');
+    st.className = 'chave-status ok';
+    if (preencher) aplicarLeitura(r, 'chave colada', false);
+  }).catch(() => {});
+}
+
+$('#chave').addEventListener('input', () => {
+  clearTimeout(window._chaveTimer);
+  window._chaveTimer = setTimeout(() => validarChave({ preencher: true }), 250);
+});
 
 $('#zona').addEventListener('click', () => $('#arquivo').click());
 $('#arquivo').addEventListener('change', (e) => { lerArquivos(e.target.files); e.target.value = ''; });
@@ -504,11 +690,16 @@ $('#zona').addEventListener('drop', (e) => lerArquivos(e.dataTransfer.files));
 function limpar() {
   $('#form').reset();
   $('#data').value = new Date().toISOString().slice(0, 10);
+  $('#data').dataset.padrao = $('#data').value;
   $('#tipoDoc').value = 'NF-e';
+  $('#tipoDoc').dataset.padrao = 'NF-e';
   ANEXOS = [];
   EDITANDO = null;
   pintarAnexos();
   $('#erros').innerHTML = '';
+  $('#leitura').innerHTML = '';
+  $('#chaveStatus').textContent = '';
+  $('#chaveStatus').className = 'chave-status';
   $('#tituloForm').textContent = 'Novo lançamento';
   $('#tagEdicao').textContent = '';
   $('#btnSalvar').textContent = 'Salvar lançamento';
@@ -529,12 +720,14 @@ function editar(id) {
   $('#cnpj').value = l.cnpj || '';
   $('#tipoDoc').value = l.documento?.tipo || '';
   $('#numDoc').value = l.documento?.numero || '';
+  $('#chave').value = l.documento?.chave || '';
   $('#pagador').value = l.pagador;
   $('#forma').value = l.forma || '';
   $('#status').value = l.status;
   $('#obs').value = l.obs || '';
   ANEXOS = (l.anexos || []).map((a) => ({ ...a }));
   pintarAnexos();
+  validarChave();
 
   if ((EST.socios || []).length) {
     const modo = Array.isArray(l.rateio) && l.rateio.length ? 'custom' : 'quotas';
@@ -576,6 +769,7 @@ $('#form').addEventListener('submit', async (e) => {
       pagador: $('#pagador').value.trim(),
       forma: $('#forma').value.trim(),
       status: $('#status').value,
+      chave: $('#chave').value,
       rateio: rateioDoForm(),
       obs: $('#obs').value,
       anexos: ANEXOS,

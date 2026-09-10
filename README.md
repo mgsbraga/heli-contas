@@ -89,6 +89,61 @@ pode arrastar o arquivo para dentro da janela do terminal.
 
 ---
 
+## Leitura automática da nota
+
+Nada aqui usa IA nem OCR. São três leituras determinísticas: ou o dado é lido com
+exatidão, ou o campo fica vazio para você preencher. O sistema nunca aproxima.
+
+### 1. O XML da nota — o caminho completo
+
+Arraste o arquivo `.xml` na área de anexo. Preenche fornecedor, CNPJ, valor, data,
+número, tipo, chave e descrição de uma vez. O arquivo fica anexado ao lançamento
+como comprovante.
+
+Funciona com NF-e e NFC-e (layout nacional da SEFAZ, imutável há anos) e com NFS-e
+tanto no padrão nacional quanto no layout ABRASF que parte dos municípios ainda usa.
+Desde 1º/01/2026 todos os municípios devem seguir o padrão nacional da NFS-e, então
+a cobertura em nota de serviço só melhora daqui para frente.
+
+**Peça o XML aos fornecedores.** Eles são obrigados a fornecer, e normalmente já
+mandam junto com o PDF — é só não descartar o anexo.
+
+### 2. A chave de acesso — 44 dígitos que já dizem muito
+
+Cole no campo *Chave de acesso*. Os próprios dígitos carregam UF, ano e mês de
+emissão, CNPJ do emitente, modelo, série e número:
+
+```
+43 1712 07364617000135 55 000 000012014 1 00012014 6
+UF  AAMM  CNPJ emitente  ·  série  número  ·        DV
+```
+
+O último dígito é um verificador módulo 11. Se você errar ou trocar um número na
+digitação, o painel avisa na hora — não deixa passar chave inválida.
+
+### 3. O QR Code do DANFE — quando só veio o papel
+
+Arraste a foto do DANFE. O painel decodifica o QR Code e extrai a chave, caindo no
+caminho 2. Decodificar QR é geometria e correção de erro Reed-Solomon: ou o código
+está legível, ou não sai nada — nunca sai "quase certo".
+
+Com PDF, o painel procura a chave na camada de texto do arquivo. Se o PDF for uma
+imagem escaneada, não há texto para achar: use a foto para ler o QR, ou cole a chave.
+
+### O que a leitura nunca faz
+
+**Não sobrescreve o que você digitou.** Só campos vazios são preenchidos, e o painel
+lista quais foram. A única exceção são os valores que o próprio formulário sugeriu —
+a data de hoje e o tipo "NF-e" — que cedem lugar ao dado real da nota.
+
+**Não lê nota escaneada sem QR.** OCR clássico erra CNPJ e valor o suficiente para
+você ter de conferir tudo, o que anularia o ganho. Preferimos não oferecer.
+
+**Não consulta nada online.** O decodificador de QR está versionado em
+`painel/vendor/` e roda offline. Nenhum dado seu sai da máquina.
+
+---
+
 ## Rateio entre sócios
 
 Cada despesa sai do bolso de uma pessoa, mas pertence a todos conforme as quotas.
