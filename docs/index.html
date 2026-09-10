@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prestação de Contas</title>
+<style>
+  :root {
+    --bg: #0a0e13;
+    --panel: #111820;
+    --panel-2: #161f29;
+    --line: #1f2b38;
+    --line-soft: #18222d;
+    --txt: #e4ecf4;
+    --txt-2: #94a5b8;
+    --txt-3: #5f7186;
+    --accent: #f2a950;
+    --accent-dim: #7a5827;
+    --ok: #4ec9a0;
+    --warn: #e8825a;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--txt);
+    font: 400 14px/1.55 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------------- tela de senha ---------------- */
+
+  #gate {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  .gate-card {
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+  .mark {
+    width: 46px; height: 46px;
+    margin: 0 auto 22px;
+    display: block;
+    color: var(--accent);
+  }
+  .gate-card h1 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .gate-card p.sub {
+    color: var(--txt-3);
+    font-size: 12.5px;
+    margin: 0 0 26px;
+  }
+  .field {
+    display: flex;
+    gap: 8px;
+  }
+  input[type="password"], input[type="text"], select {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--txt);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: var(--accent-dim); }
+  .btn {
+    background: var(--accent);
+    color: #171104;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-weight: 600;
+    font-size: 13.5px;
+    white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .88; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--txt-2);
+    border: 1px solid var(--line);
+  }
+  .btn-ghost:hover { color: var(--txt); border-color: var(--txt-3); }
+
+  #gateMsg {
+    min-height: 18px;
+    margin-top: 14px;
+    font-size: 12.5px;
+    color: var(--warn);
+  }
+  #gateMsg.info { color: var(--txt-3); }
+  .lock-note {
+    margin-top: 30px;
+    font-size: 11.5px;
+    color: var(--txt-3);
+    line-height: 1.7;
+  }
+
+  /* ---------------- app ---------------- */
+
+  #app { display: none; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
+
+  header.top {
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 26px;
+  }
+  .top-inner {
+    max-width: 1180px; margin: 0 auto; padding: 18px 24px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .top .mark { width: 26px; height: 26px; margin: 0; }
+  .org { font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; }
+  .scope {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em;
+    padding: 3px 8px; border-radius: 20px;
+    border: 1px solid var(--line); color: var(--txt-3);
+  }
+  .scope.total { border-color: var(--accent-dim); color: var(--accent); }
+  .spacer { flex: 1; }
+  .stamp { font-size: 11.5px; color: var(--txt-3); }
+
+  /* KPIs */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 26px;
+  }
+  .kpi {
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 15px 17px;
+  }
+  .kpi .lbl {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--txt-3); margin-bottom: 7px;
+  }
+  .kpi .val {
+    font: 600 21px/1.1 var(--sans);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi .val.accent { color: var(--accent); }
+  .kpi .val.warn { color: var(--warn); }
+  .kpi .foot { font-size: 11.5px; color: var(--txt-3); margin-top: 5px; }
+
+  /* seções */
+  section { margin-bottom: 30px; }
+  h2 {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .09em;
+    color: var(--txt-3);
+    margin: 0 0 13px;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+
+  /* barras */
+  .bars { display: flex; flex-direction: column; gap: 11px; }
+  .bar-row { font-size: 13px; }
+  .bar-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; }
+  .bar-head .n { color: var(--txt-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-head .v { font-variant-numeric: tabular-nums; color: var(--txt); flex-shrink: 0; }
+  .bar-track { height: 5px; background: var(--line-soft); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+  .bar-fill.alt { background: #4a7fb5; }
+  .bar-fill.p2 { background: #6f8fa8; }
+
+  /* filtros */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 14px; align-items: center;
+  }
+  .filters input[type="text"] { flex: 1 1 220px; min-width: 180px; }
+  .filters select { width: auto; min-width: 150px; }
+
+  /* tabela */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; font-size: 10.5px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--txt-3);
+    padding: 11px 14px; background: var(--panel-2);
+    border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  thead th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr { border-bottom: 1px solid var(--line-soft); }
+  tbody tr:last-child { border-bottom: 0; }
+  tbody tr.lanc { cursor: pointer; }
+  tbody tr.lanc:hover { background: var(--panel-2); }
+  td { padding: 11px 14px; vertical-align: top; }
+  td.id { font: 12px var(--mono); color: var(--txt-3); white-space: nowrap; }
+  td.desc { color: var(--txt); }
+  td.desc small { display: block; color: var(--txt-3); font-size: 11.5px; margin-top: 2px; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    border: 1px solid var(--line); color: var(--txt-2); white-space: nowrap;
+  }
+  .pill.st-pago { border-color: #23503f; color: var(--ok); }
+  .pill.st-apagar { border-color: #5c3a2a; color: var(--warn); }
+  .pill.st-reembolsar { border-color: var(--accent-dim); color: var(--accent); }
+
+  tr.det td { background: #0d141c; padding: 0 14px 16px; }
+  .det-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px 22px; padding-top: 4px;
+  }
+  .det-grid .k {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--txt-3); margin-bottom: 3px;
+  }
+  .det-grid .v { font-size: 13px; }
+  .anexos { margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .anexo {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 7px 11px;
+    font-size: 12.5px; color: var(--txt-2);
+  }
+  .anexo:hover { border-color: var(--accent-dim); color: var(--txt); }
+  .anexo svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .7; }
+
+  .vazio { padding: 40px; text-align: center; color: var(--txt-3); font-size: 13px; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  .hint {
+    background: var(--panel); border: 1px solid var(--line-soft);
+    border-radius: var(--radius); padding: 15px 18px;
+    font-size: 12.5px; color: var(--txt-2); line-height: 1.65;
+  }
+  .hint b { color: var(--txt); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ============ portão ============ -->
+<div id="gate">
+  <div class="gate-card">
+    <svg class="mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 12h36M24 12v5"/>
+      <path d="M13 22h16a5 5 0 0 1 5 5v4H18a5 5 0 0 1-5-5v-4Z"/>
+      <path d="M34 27h6l-3 4h-3M16 31v5M13 36h8"/>
+    </svg>
+    <h1 id="gateOrg">Prestação de Contas</h1>
+    <p class="sub">Acesso restrito — informe a senha</p>
+    <form class="field" id="gateForm" autocomplete="off">
+      <input type="password" id="senha" placeholder="Senha" autocomplete="current-password" autofocus>
+      <button class="btn" type="submit" id="gateBtn">Abrir</button>
+    </form>
+    <div id="gateMsg"></div>
+    <p class="lock-note">
+      Os dados deste site estão cifrados com AES-256-GCM.<br>
+      A senha não é enviada a servidor algum — a decifragem acontece no seu navegador.
+    </p>
+  </div>
+</div>
+
+<!-- ============ app ============ -->
+<div id="app">
+  <header class="top">
+    <div class="top-inner">
+      <svg class="mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 12h36M24 12v5"/>
+        <path d="M13 22h16a5 5 0 0 1 5 5v4H18a5 5 0 0 1-5-5v-4Z"/>
+        <path d="M34 27h6l-3 4h-3M16 31v5M13 36h8"/>
+      </svg>
+      <span class="org" id="appOrg"></span>
+      <span class="scope" id="appScope"></span>
+      <span class="spacer"></span>
+      <span class="stamp" id="appStamp"></span>
+      <button class="btn btn-ghost" id="btnSair">Sair</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="kpis" id="kpis"></div>
+
+    <section class="grid-2">
+      <div class="card">
+        <h2>Por categoria</h2>
+        <div class="bars" id="barsCat"></div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:18px">
+          <h2>Por quem pagou</h2>
+          <div class="bars" id="barsPag"></div>
+        </div>
+        <div class="card">
+          <h2>Por mês</h2>
+          <div class="bars" id="barsMes"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="secLancamentos">
+      <h2>Lançamentos</h2>
+      <div class="filters">
+        <input type="text" id="fBusca" placeholder="Buscar descrição, fornecedor, CNPJ, nº da nota…">
+        <select id="fCat"><option value="">Todas as categorias</option></select>
+        <select id="fPag"><option value="">Todos os pagadores</option></select>
+        <select id="fStatus"><option value="">Todos os status</option></select>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Data</th><th>Descrição</th>
+              <th>Pagador</th><th>Status</th><th class="num">Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" id="btnCsv">Baixar CSV do que está filtrado</button>
+      </div>
+    </section>
+
+    <section id="secResumoAviso" style="display:none">
+      <div class="hint">
+        Você entrou com a senha de <b>resumo</b>. Este nível mostra apenas os totais
+        consolidados acima — fornecedor, número da nota fiscal, descrição individual e
+        anexos ficam disponíveis somente com a senha total.
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { derivarChave, decifrar, paraObjeto, b64 } from './crypto.mjs';
+
+const $ = (s) => document.querySelector(s);
+const brl = (n) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const dataBR = (iso) => (iso || '').split('-').reverse().join('/');
+const tamanho = (b) => {
+  if (!b) return '';
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(b < 10240 ? 1 : 0) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+};
+const mesBR = (ym) => {
+  const M = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const [a, m] = (ym || '').split('-');
+  return m ? `${M[+m - 1]}/${a.slice(2)}` : ym;
+};
+
+let META = null;
+let CHAVE = null;     // chave total, quando o escopo é total
+let DADOS = null;
+let ESCOPO = null;    // 'total' | 'resumo'
+
+// ---------------------------------------------------------------- portão
+
+(async function carregarMeta() {
+  try {
+    META = await (await fetch('data/meta.json', { cache: 'no-store' })).json();
+    if (META.org) {
+      $('#gateOrg').textContent = META.org;
+      document.title = META.org + ' — Prestação de Contas';
+    }
+  } catch {
+    $('#gateMsg').className = 'info';
+    $('#gateMsg').textContent = 'Ainda não há dados publicados aqui.';
+    $('#senha').disabled = true;
+    $('#gateBtn').disabled = true;
+  }
+})();
+
+$('#gateForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const senha = $('#senha').value;
+  if (!senha || !META) return;
+
+  $('#gateBtn').disabled = true;
+  $('#gateMsg').className = 'info';
+  $('#gateMsg').textContent = 'Decifrando…';
+  await new Promise((r) => setTimeout(r, 30));
+
+  const tentativa = await abrir(senha);
+  if (!tentativa) {
+    $('#gateBtn').disabled = false;
+    $('#gateMsg').className = '';
+    $('#gateMsg').textContent = 'Senha incorreta.';
+    $('#senha').select();
+    return;
+  }
+  $('#senha').value = '';
+  $('#gate').style.display = 'none';
+  $('#app').style.display = 'block';
+  render();
+});
+
+async function abrir(senha) {
+  // tenta o escopo total; se falhar, tenta o resumo. Chaves e blobs são independentes.
+  try {
+    const k = await derivarChave(senha, b64.to(META.saltTotal));
+    const env = await (await fetch('data/ledger.enc', { cache: 'no-store' })).json();
+    DADOS = paraObjeto(await decifrar(k, env));
+    CHAVE = k;
+    ESCOPO = 'total';
+    return true;
+  } catch { /* segue para o resumo */ }
+
+  try {
+    const k = await derivarChave(senha, b64.to(META.saltResumo));
+    const env = await (await fetch('data/resumo.enc', { cache: 'no-store' })).json();
+    DADOS = paraObjeto(await decifrar(k, env));
+    ESCOPO = 'resumo';
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+$('#btnSair').addEventListener('click', () => location.reload());
+
+// ---------------------------------------------------------------- render
+
+function render() {
+  $('#appOrg').textContent = DADOS.org || META.org || 'Prestação de contas';
+  $('#appScope').textContent = ESCOPO === 'total' ? 'acesso total' : 'resumo';
+  $('#appScope').className = 'scope' + (ESCOPO === 'total' ? ' total' : '');
+  const dt = new Date(DADOS.geradoEm || META.geradoEm);
+  $('#appStamp').textContent = 'atualizado em ' + dt.toLocaleDateString('pt-BR') + ' ' +
+    dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  if (ESCOPO === 'total') renderTotal();
+  else renderResumo();
+}
+
+function agregar(lancs, chave) {
+  const m = new Map();
+  for (const l of lancs) {
+    const k = chave(l) || '—';
+    const c = m.get(k) || { total: 0, qtd: 0 };
+    c.total += l.valor; c.qtd++;
+    m.set(k, c);
+  }
+  return [...m].map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.total - a.total);
+}
+
+// Os itens chegam já na ordem desejada — categorias e pagadores por valor, meses cronológicos.
+function barras(el, itens, { classe = '', rotulo = (x) => x.nome } = {}) {
+  if (!itens.length) { el.innerHTML = '<div style="color:var(--txt-3);font-size:12.5px">Sem dados.</div>'; return; }
+  const max = Math.max(...itens.map((i) => i.total)) || 1;
+  el.innerHTML = itens.map((i) => `
+    <div class="bar-row">
+      <div class="bar-head">
+        <span class="n" title="${esc(i.nome)}">${esc(rotulo(i))}</span>
+        <span class="v">${brl(i.total)}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill ${classe}" style="width:${(i.total / max * 100).toFixed(1)}%"></div></div>
+    </div>`).join('');
+}
+
+function kpis(itens) {
+  $('#kpis').innerHTML = itens.map((k) => `
+    <div class="kpi">
+      <div class="lbl">${esc(k.lbl)}</div>
+      <div class="val ${k.cls || ''}">${k.val}</div>
+      ${k.foot ? `<div class="foot">${esc(k.foot)}</div>` : ''}
+    </div>`).join('');
+}
+
+// ---------------- escopo resumo ----------------
+
+function renderResumo() {
+  $('#secLancamentos').style.display = 'none';
+  $('#secResumoAviso').style.display = 'block';
+
+  const meses = DADOS.porMes || [];
+  kpis([
+    { lbl: 'Total desembolsado', val: brl(DADOS.totalGeral), cls: 'accent' },
+    { lbl: 'Lançamentos', val: DADOS.qtdLancamentos },
+    { lbl: 'Categorias', val: (DADOS.porCategoria || []).length },
+    {
+      lbl: 'Período', val: meses.length ? mesBR(meses[0].nome) + ' → ' + mesBR(meses[meses.length - 1].nome) : '—',
+      foot: meses.length + ' meses',
+    },
+  ]);
+  barras($('#barsCat'), DADOS.porCategoria || []);
+  barras($('#barsPag'), DADOS.porPagador || [], { classe: 'alt' });
+  barras($('#barsMes'), meses, { classe: 'p2', rotulo: (i) => mesBR(i.nome) });
+}
+
+// ---------------- escopo total ----------------
+
+function renderTotal() {
+  const L = DADOS.lancamentos || [];
+  const total = L.reduce((s, l) => s + l.valor, 0);
+  const aPagar = L.filter((l) => l.status === 'a pagar').reduce((s, l) => s + l.valor, 0);
+  const meses = agregar(L, (l) => l.data.slice(0, 7)).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  kpis([
+    { lbl: 'Total desembolsado', val: brl(total), cls: 'accent', foot: L.length + ' lançamentos' },
+    { lbl: 'Em aberto (a pagar)', val: brl(aPagar), cls: aPagar ? 'warn' : '' },
+    { lbl: 'Com nota fiscal', val: L.filter((l) => l.anexos && l.anexos.length).length + ' / ' + L.length },
+    {
+      lbl: 'Período', val: meses.length ? mesBR(meses[0].nome) + ' → ' + mesBR(meses[meses.length - 1].nome) : '—',
+      foot: meses.length + ' meses',
+    },
+  ]);
+
+  barras($('#barsCat'), agregar(L, (l) => l.categoria));
+  barras($('#barsPag'), agregar(L, (l) => l.pagador), { classe: 'alt' });
+  barras($('#barsMes'), meses, { classe: 'p2', rotulo: (i) => mesBR(i.nome) });
+
+  preencherSelect($('#fCat'), [...new Set(L.map((l) => l.categoria))].sort());
+  preencherSelect($('#fPag'), [...new Set(L.map((l) => l.pagador))].sort());
+  preencherSelect($('#fStatus'), [...new Set(L.map((l) => l.status))].sort());
+  for (const id of ['#fBusca', '#fCat', '#fPag', '#fStatus']) {
+    $(id).addEventListener('input', tabela);
+  }
+  tabela();
+}
+
+function preencherSelect(sel, valores) {
+  sel.innerHTML = sel.options[0].outerHTML + valores.map((v) => `<option>${esc(v)}</option>`).join('');
+}
+
+function filtrados() {
+  const q = $('#fBusca').value.trim().toLowerCase();
+  const c = $('#fCat').value, p = $('#fPag').value, s = $('#fStatus').value;
+  return (DADOS.lancamentos || []).filter((l) => {
+    if (c && l.categoria !== c) return false;
+    if (p && l.pagador !== p) return false;
+    if (s && l.status !== s) return false;
+    if (!q) return true;
+    const alvo = [l.descricao, l.fornecedor, l.cnpj, l.documento?.numero, l.obs, l.id]
+      .filter(Boolean).join(' ').toLowerCase();
+    return alvo.includes(q);
+  });
+}
+
+function tabela() {
+  const L = filtrados();
+  const tb = $('#tbody');
+  if (!L.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="vazio">Nenhum lançamento encontrado.</td></tr>';
+    return;
+  }
+  const soma = L.reduce((s, l) => s + l.valor, 0);
+  tb.innerHTML = L.map((l, i) => `
+    <tr class="lanc" data-i="${i}">
+      <td class="id">${esc(l.id)}</td>
+      <td style="white-space:nowrap">${dataBR(l.data)}</td>
+      <td class="desc">${esc(l.descricao)}<small>${esc(l.categoria)}${l.fornecedor ? ' · ' + esc(l.fornecedor) : ''}</small></td>
+      <td>${esc(l.pagador)}</td>
+      <td><span class="pill st-${esc((l.status || '').replace(' ', ''))}">${esc(l.status)}</span></td>
+      <td class="num">${brl(l.valor)}</td>
+    </tr>
+    <tr class="det" data-det="${i}" hidden><td colspan="6">${detalhe(l)}</td></tr>`).join('') + `
+    <tr><td colspan="5" style="color:var(--txt-3);font-size:12px">${L.length} lançamento(s) no filtro</td>
+        <td class="num" style="font-weight:600">${brl(soma)}</td></tr>`;
+
+  tb.querySelectorAll('tr.lanc').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      const d = tb.querySelector(`tr[data-det="${tr.dataset.i}"]`);
+      d.hidden = !d.hidden;
+    });
+  });
+  tb.querySelectorAll('[data-anexo]').forEach((a) => {
+    a.addEventListener('click', (e) => { e.preventDefault(); abrirAnexo(a.dataset.anexo, a.dataset.mime, a.dataset.nome); });
+  });
+}
+
+function detalhe(l) {
+  const campo = (k, v) => v ? `<div><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : '';
+  const anexos = (l.anexos || []).map((a) => `
+    <a class="anexo" href="#" data-anexo="${esc(a.arquivo)}" data-mime="${esc(a.mime)}" data-nome="${esc(a.nome)}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>
+      </svg>
+      ${esc(a.nome)} <span style="color:var(--txt-3)">${tamanho(a.tamanho)}</span>
+    </a>`).join('');
+
+  return `<div class="det-grid">
+      ${campo('Fornecedor', l.fornecedor)}
+      ${campo('CNPJ / CPF', l.cnpj)}
+      ${campo('Documento', [l.documento?.tipo, l.documento?.numero].filter(Boolean).join(' nº '))}
+      ${campo('Forma de pagamento', l.forma)}
+      ${campo('Registrado em', l.registradoEm ? new Date(l.registradoEm).toLocaleDateString('pt-BR') : '')}
+      ${campo('Observação', l.obs)}
+    </div>
+    ${anexos ? `<div class="anexos">${anexos}</div>`
+             : '<div style="margin-top:14px;font-size:12.5px;color:var(--txt-3)">Sem nota fiscal anexada.</div>'}`;
+}
+
+async function abrirAnexo(arquivo, mime, nome) {
+  try {
+    const env = await (await fetch('data/nf/' + encodeURIComponent(arquivo) + '.enc', { cache: 'no-store' })).json();
+    const bytes = await decifrar(CHAVE, env);
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' }));
+    const a = document.createElement('a');
+    a.href = url;
+    if (mime === 'application/pdf' || (mime || '').startsWith('image/')) a.target = '_blank';
+    else a.download = nome || arquivo;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch {
+    alert('Não foi possível abrir este anexo.');
+  }
+}
+
+$('#btnCsv').addEventListener('click', () => {
+  const L = filtrados();
+  const cab = ['ID', 'Data', 'Descrição', 'Categoria', 'Fornecedor', 'CNPJ/CPF', 'Documento', 'Nº doc', 'Valor', 'Pagador', 'Forma', 'Status', 'Observação'];
+  const cel = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const linhas = L.map((l) => [
+    l.id, dataBR(l.data), l.descricao, l.categoria, l.fornecedor, l.cnpj,
+    l.documento?.tipo, l.documento?.numero,
+    l.valor.toFixed(2).replace('.', ','), l.pagador, l.forma, l.status, l.obs,
+  ].map(cel).join(';'));
+  const csv = '﻿' + [cab.map(cel).join(';'), ...linhas].join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'prestacao-contas-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

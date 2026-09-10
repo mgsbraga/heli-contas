@@ -1,0 +1,12 @@
+# ============================================================
+# NADA DE DADO EM CLARO VAI PARA O GIT
+# ============================================================
+local/
+*.local.json
+.secrets.json
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+node_modules/
