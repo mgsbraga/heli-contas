@@ -51,7 +51,9 @@ async function cmdInit() {
   fs.mkdirSync(P.nfOrig, { recursive: true });
 
   await build();
-  console.log('\n  Pronto.');
+  console.log('\n  Falta publicar — enquanto isso o site não tem o que decifrar e a');
+  console.log('  tela de senha fica travada.');
+  await talvezPublicar();
   console.log('  Se a operação tem mais de um sócio bancando as despesas, defina as quotas');
   console.log('  agora — o rateio passa a ser automático:  node heli.mjs socios');
   console.log('  Depois, para lançar:  node heli.mjs add\n');
@@ -226,6 +228,7 @@ async function cmdSocios() {
   console.log('\n  ✓ quadro societário gravado.');
   await build();
   mostrarAcerto(lerLedger());
+  await talvezPublicar();
 }
 
 function mostrarAcerto(ledger) {
@@ -288,6 +291,7 @@ async function cmdRm(id) {
   gravarLedger(ledger);
   console.log('  ✓ removido.');
   await build();
+  await talvezPublicar();
 }
 
 // ---------------------------------------------------------------- senha / restore
@@ -305,7 +309,8 @@ async function cmdSenha() {
     for (const f of fs.readdirSync(P.nfEnc)) fs.unlinkSync(path.join(P.nfEnc, f));
   }
   await build();
-  console.log('\n  ✓ senha trocada. Publique para valer no site:  node heli.mjs publish\n');
+  console.log('\n  ✓ senha trocada — só vale no site depois de publicar.');
+  await talvezPublicar();
 }
 
 async function cmdRestore() {
