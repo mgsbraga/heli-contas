@@ -1,0 +1,27 @@
+# Publicação do recebedor de notas pela linha de comando, sem depender de
+# navegar no painel da Cloudflare.
+#
+# Passo a passo, de dentro desta pasta (contas/envio):
+#
+#   npx wrangler login                      abre o navegador uma vez, para autorizar
+#   npx wrangler r2 bucket create heli-envios
+#   npx wrangler secret put SEGREDO_ADMIN   cola a senha longa quando ele pedir
+#   npx wrangler secret put CODIGO          cola a palavra curta do link
+#   npx wrangler deploy                     publica e imprime a URL
+#
+# Nenhum segredo mora neste arquivo — por isso SEGREDO_ADMIN e CODIGO entram por
+# "secret put", e não como [vars]. Este arquivo vai para o repositório público.
+
+name = "heli-envios"
+main = "dist/worker.js"
+compatibility_date = "2026-09-01"
+
+# O arquivo dist/worker.js já vem pronto de "node heli.mjs envio":
+# não há empacotamento, não há dependência, é um módulo só.
+
+[[r2_buckets]]
+binding = "ENVIOS"
+bucket_name = "heli-envios"
+
+[observability]
+enabled = true

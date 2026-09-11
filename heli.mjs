@@ -395,24 +395,34 @@ async function cmdEnvio() {
   }
 
   console.log(`
-  Falta publicar o recebedor. Uma vez só, na Cloudflare:
+  Falta publicar o recebedor. Crie a conta em dash.cloudflare.com — o plano
+  gratuito basta, e ao contrário do da Vercel ele permite uso comercial.
 
-   1. Crie a conta em dash.cloudflare.com. O plano gratuito basta, e ao
-      contrário do da Vercel ele permite uso comercial.
+  ── Pelo terminal, que é o caminho mais curto ───────────
 
-   2. Em R2, crie um bucket chamado   heli-envios
+  Cinco comandos, de dentro da pasta  contas/envio :
 
-   3. Em Workers & Pages, crie um Worker. Apague o código de exemplo e cole
-      o conteúdo de   envio/dist/worker.js
+    npx wrangler login
+    npx wrangler r2 bucket create heli-envios
+    npx wrangler secret put SEGREDO_ADMIN     (invente uma senha longa)
+    npx wrangler secret put CODIGO            (uma palavra curta, vai no link)
+    npx wrangler deploy
 
-   4. Nas configurações do Worker, adicione:
-        · Binding de R2 — nome ENVIOS, apontando para heli-envios
-        · Variável SEGREDO_ADMIN — uma senha longa e aleatória
-        · Variável CODIGO — uma palavra curta, que vai no link divulgado
+  O primeiro abre o navegador uma vez para autorizar. O último imprime a URL
+  do recebedor. Guarde a senha do SEGREDO_ADMIN: você vai colá-la a seguir.
 
-   5. Volte aqui e registre o endereço:
+  ── Ou pelo painel, se preferir clicar ──────────────────
 
-        node heli.mjs envio-config
+   1. Workers & Pages  →  Create  →  Worker  →  Deploy
+   2. No Worker criado, botão  Edit code  — apague o exemplo e cole o
+      conteúdo de  envio/dist/worker.js  , depois  Deploy
+   3. Settings → Bindings:  R2 bucket, variável ENVIOS, bucket heli-envios
+   4. Settings → Variables:  SEGREDO_ADMIN e CODIGO, marcados como Secret
+   5. Em R2, crie antes o bucket  heli-envios
+
+  ── Depois, dos dois jeitos ─────────────────────────────
+
+    node heli.mjs envio-config
 `);
 }
 

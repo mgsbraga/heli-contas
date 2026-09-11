@@ -165,18 +165,36 @@ aberto por quem tem a senha; aqui é cifrado lá fora e aberto só por você.
 node heli.mjs envio
 ```
 
-Gera `envio/dist/worker.js` e imprime o passo a passo. Resumo do que é feito uma vez
-só, na Cloudflare:
+Gera `envio/dist/worker.js` e imprime o passo a passo.
 
-1. Conta em `dash.cloudflare.com` — o plano gratuito basta. **Escolhemos Cloudflare
-   em vez de Vercel porque o plano gratuito da Vercel proíbe uso comercial**, e a
-   operação é uma empresa.
-2. Em R2, um bucket chamado `heli-envios`.
-3. Em Workers & Pages, um Worker com o conteúdo de `envio/dist/worker.js`.
-4. Nas configurações do Worker: binding de R2 `ENVIOS` → `heli-envios`, variável
-   `SEGREDO_ADMIN` (senha longa e aleatória) e `CODIGO` (palavra curta que vai no link).
-5. De volta aqui: `node heli.mjs envio-config` registra o endereço e imprime o link
-   para divulgar.
+Crie a conta em `dash.cloudflare.com` — o plano gratuito basta. **Escolhemos
+Cloudflare em vez de Vercel porque o plano gratuito da Vercel proíbe uso comercial**,
+e a operação é uma empresa.
+
+**Pelo terminal**, de dentro de `contas/envio`, é o caminho mais curto e o que não
+depende de achar botão em painel:
+
+```powershell
+npx wrangler login
+npx wrangler r2 bucket create heli-envios
+npx wrangler secret put SEGREDO_ADMIN
+npx wrangler secret put CODIGO
+npx wrangler deploy
+```
+
+O primeiro abre o navegador uma vez para autorizar; o último imprime a URL do
+recebedor. O `wrangler.toml` desta pasta já traz o nome do Worker, o arquivo a
+publicar e o binding de R2 — nenhum segredo mora nele, por isso `SEGREDO_ADMIN` e
+`CODIGO` entram por `secret put`.
+
+**Pelo painel**, se preferir clicar: Workers & Pages → Create → Worker → Deploy; no
+Worker criado, *Edit code*, apague o exemplo e cole o conteúdo de
+`envio/dist/worker.js`; em Settings → Bindings, um R2 bucket com variável `ENVIOS`
+apontando para `heli-envios` (crie o bucket antes, na seção R2); em Settings →
+Variables, `SEGREDO_ADMIN` e `CODIGO` marcados como *Secret*.
+
+Dos dois jeitos, termine com `node heli.mjs envio-config`, que registra o endereço
+e imprime o link para divulgar.
 
 O gratuito da Cloudflare cobre 100 mil requisições por dia e 10 GB no R2 — ordens de
 grandeza acima do que uma operação deste porte consome.
