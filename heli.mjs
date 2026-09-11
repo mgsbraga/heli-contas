@@ -432,7 +432,14 @@ async function cmdEnvioConfig() {
   ── Endereço do recebedor ───────────────────────────────
 `);
   const url = await pergunta('  URL do Worker (ex.: https://heli-envios.suaconta.workers.dev)', cfg.url);
-  const segredo = await senhaOculta('  SEGREDO_ADMIN (o mesmo que está na Cloudflare)');
+
+  // Enter mantém o segredo atual. Sem isso, quem vem só trocar o código acaba
+  // sobrescrevendo um segredo que estava certo por outro digitado de novo.
+  const segredo = await senhaOculta(
+    cfg.temSegredo
+      ? '  SEGREDO_ADMIN (enter mantém o que já está guardado)'
+      : '  SEGREDO_ADMIN (o mesmo que está na Cloudflare)',
+  );
   const codigo = await pergunta('  CODIGO do link (enter p/ nenhum)', cfg.codigo);
 
   configurarEnvio({ url, segredo: segredo || undefined, codigo });

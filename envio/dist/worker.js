@@ -32,6 +32,23 @@ const PAGINA = "<!doctype html>\n<html lang=\"pt-BR\">\n<head>\n<meta charset=\"
 
 const LIMITE = 25 * 1024 * 1024;   // 25 MB por envio
 
+const PAGINA_LINK_INVALIDO = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Link inválido</title>
+<style>
+ body{background:#0a0e13;color:#e4ecf4;font:400 15px/1.6 "Inter",-apple-system,"Segoe UI",Roboto,sans-serif;
+      margin:0;display:grid;place-items:center;min-height:100vh;padding:28px;text-align:center}
+ .c{max-width:420px} svg{width:44px;height:44px;color:#e8825a;margin-bottom:18px}
+ h1{font-size:19px;font-weight:600;margin:0 0 10px}
+ p{color:#94a5b8;font-size:14px;margin:0}
+</style></head><body><div class="c">
+<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<circle cx="24" cy="24" r="20"/><path d="M24 14v13M24 33v.5"/></svg>
+<h1>Este link não vale mais</h1>
+<p>Peça um link atualizado a quem solicitou a nota. O endereço muda de tempos em tempos, por segurança.</p>
+</div></body></html>`;
+
 const texto = (corpo, codigo = 200, tipo = 'text/plain; charset=utf-8') =>
   new Response(corpo, { status: codigo, headers: { 'content-type': tipo, 'cache-control': 'no-store' } });
 
@@ -61,6 +78,12 @@ export default {
 
     // ---------------------------------------------------------- página pública
     if (rota === '/' && req.method === 'GET') {
+      // O código é conferido já na abertura. Antes ele só era verificado no
+      // envio, e quem chegasse com um link velho preenchia tudo, anexava os
+      // arquivos e só então era barrado — perdendo o que tinha feito.
+      const exigido = (env.CODIGO || '').trim();
+      if (exigido && url.searchParams.get('c') !== exigido) return texto(PAGINA_LINK_INVALIDO, 403, 'text/html; charset=utf-8');
+
       const html = PAGINA
         .replace('__CHAVE_PUBLICA_JSON__', JSON.stringify(CHAVE_PUBLICA))
         .replace('__CODIGO_NA_URL__', JSON.stringify(url.searchParams.get('c') || ''));
