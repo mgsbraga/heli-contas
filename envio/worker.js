@@ -21,6 +21,11 @@
 const CHAVE_PUBLICA = __CHAVE_PUBLICA__;
 const PAGINA = __HTML__;
 
+// O formulário também é servido pelo site próprio, em /enviar. Como ali ele roda
+// em outra origem, o envio precisa ser autorizado explicitamente — e só para essa
+// origem, não para qualquer página da internet.
+const ORIGEM_SITE = __ORIGEM_SITE__;
+
 const LIMITE = 25 * 1024 * 1024;   // 25 MB por envio
 
 const PAGINA_LINK_INVALIDO = `<!doctype html>
@@ -43,10 +48,10 @@ const PAGINA_LINK_INVALIDO = `<!doctype html>
 const texto = (corpo, codigo = 200, tipo = 'text/plain; charset=utf-8') =>
   new Response(corpo, { status: codigo, headers: { 'content-type': tipo, 'cache-control': 'no-store' } });
 
-const json = (corpo, codigo = 200) =>
+const json = (corpo, codigo = 200, extra = {}) =>
   new Response(JSON.stringify(corpo), {
     status: codigo,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra },
   });
 
 /** Protocolo legível para quem envia e ordenável para quem recebe. */
@@ -62,18 +67,47 @@ function novoProtocolo() {
 const admin = (req, env) =>
   Boolean(env.SEGREDO_ADMIN) && req.headers.get('x-heli-admin') === env.SEGREDO_ADMIN;
 
+/** Devolve o cabeçalho de liberação só quando a origem é o site próprio. */
+function cors(req) {
+  const origem = req.headers.get('origin');
+  if (!origem || !ORIGEM_SITE || origem !== ORIGEM_SITE) return {};
+  return {
+    'access-control-allow-origin': origem,
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    'access-control-max-age': '86400',
+    'vary': 'origin',
+  };
+}
+
+const codigoConfere = (url, env) => {
+  const exigido = (env.CODIGO || '').trim();
+  return !exigido || url.searchParams.get('c') === exigido;
+};
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     const rota = url.pathname.replace(/\/+$/, '') || '/';
+
+    // ---------------------------------------------------------- CORS e verificação
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors(req) });
+    }
+
+    // O formulário servido pelo site pergunta aqui se o código vale, antes de
+    // se desenhar. Sem isso ele só descobriria no envio, depois de a pessoa ter
+    // preenchido tudo.
+    if (rota === '/verificar' && req.method === 'GET') {
+      return json({ ok: codigoConfere(url, env) }, 200, cors(req));
+    }
 
     // ---------------------------------------------------------- página pública
     if (rota === '/' && req.method === 'GET') {
       // O código é conferido já na abertura. Antes ele só era verificado no
       // envio, e quem chegasse com um link velho preenchia tudo, anexava os
       // arquivos e só então era barrado — perdendo o que tinha feito.
-      const exigido = (env.CODIGO || '').trim();
-      if (exigido && url.searchParams.get('c') !== exigido) return texto(PAGINA_LINK_INVALIDO, 403, 'text/html; charset=utf-8');
+      if (!codigoConfere(url, env)) return texto(PAGINA_LINK_INVALIDO, 403, 'text/html; charset=utf-8');
 
       const html = PAGINA
         .replace('__CHAVE_PUBLICA_JSON__', JSON.stringify(CHAVE_PUBLICA))
@@ -83,20 +117,20 @@ export default {
 
     // ---------------------------------------------------------- envio
     if (rota === '/enviar' && req.method === 'POST') {
-      if (!env.ENVIOS) return json({ erro: 'Recebedor sem armazenamento configurado.' }, 500);
+      const h = cors(req);
+      if (!env.ENVIOS) return json({ erro: 'Recebedor sem armazenamento configurado.' }, 500, h);
 
       // O código vive no link divulgado. Não é segredo criptográfico — serve só
       // para que o endereço, se descoberto por acaso, não vire caixa de spam.
-      const exigido = (env.CODIGO || '').trim();
-      if (exigido && url.searchParams.get('c') !== exigido) {
-        return json({ erro: 'Link inválido ou expirado. Peça um link novo a quem solicitou a nota.' }, 403);
+      if (!codigoConfere(url, env)) {
+        return json({ erro: 'Link inválido ou expirado. Peça um link novo a quem solicitou a nota.' }, 403, h);
       }
 
       const tamanho = Number(req.headers.get('content-length') || 0);
       if (tamanho > LIMITE) {
-        return json({ erro: 'Envio acima de 25 MB. Mande os arquivos em partes.' }, 413);
+        return json({ erro: 'Envio acima de 25 MB. Mande os arquivos em partes.' }, 413, h);
       }
-      if (!tamanho) return json({ erro: 'Envio vazio.' }, 400);
+      if (!tamanho) return json({ erro: 'Envio vazio.' }, 400, h);
 
       const protocolo = novoProtocolo();
       // gravado exatamente como chegou: nenhum parse, nenhuma leitura
@@ -104,7 +138,7 @@ export default {
         httpMetadata: { contentType: 'application/octet-stream' },
         customMetadata: { recebidoEm: new Date().toISOString() },
       });
-      return json({ ok: true, protocolo });
+      return json({ ok: true, protocolo }, 200, h);
     }
 
     // ---------------------------------------------------------- área do painel

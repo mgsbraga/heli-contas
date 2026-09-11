@@ -187,12 +187,12 @@
 </div>
 
 <script>
-const CHAVE_PUBLICA = __CHAVE_PUBLICA_JSON__;
+const CHAVE_PUBLICA = {"key_ops":["encrypt"],"ext":true,"alg":"RSA-OAEP-256","kty":"RSA","n":"pT_DIl9ZNhN3OcRAq0Bs295ciZ5gLjp4G0COZj-0TEU5bky3CGgrSG8Xbti-_lUetg1N6RbYYt1vQjmCyyuQBTYqNophWoKiwEi-UKWm_9tthHOhpYS9AlqGck1IA3nIIfy_CmKTv-yUYVaTw8MSMGIGqsETR-WyonSe43ga8eDkAn-snA9zyJjlNrFYVRd3OiRPe2kpMifk44Gfi3pFas2BX7wr0_jxMU1MOo3COF2oz6qZ-67Dt4KbbvxeMmaGtZ0OGb6dh30vboH_jH9vtLjaDdbX157zzYAJmu8709wkf_-AEt08_v3n2a9zaBl7jrRUDBsg6QX4UN5AtqvI_0SodrXy7vC0BoZ9qD7TDL_LGSRweqGbQJJxfOar4xhvLSYdDu1sAuLEJky01sEFc51ETTW_b18E6E-aXcbtqJRmTlripAWAgPrjrCS00lIaCLl-XficvYmkIxsbjSe5NJ_wl3fiNt6jLZ77x9w--XrAu7a3PIdzvJVv30Q5txLJ","e":"AQAB"};
 // Vazio quando o próprio recebedor serve esta página; URL absoluta quando ela é
 // servida pelo site e o envio precisa atravessar para outra origem.
-const BASE = __BASE__;
+const BASE = "https://heli-envios.braga-miguel-o.workers.dev";
 // Servida pelo Worker, o código já vem resolvido; servida pelo site, sai da URL.
-const CODIGO = __CODIGO_NA_URL__ || new URLSearchParams(location.search).get('c') || '';
+const CODIGO = "" || new URLSearchParams(location.search).get('c') || '';
 
 const $ = (s) => document.querySelector(s);
 const ALG = { name: 'RSA-OAEP', hash: 'SHA-256' };
