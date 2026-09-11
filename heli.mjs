@@ -18,6 +18,7 @@ import { build, mimeDe } from './lib/build.mjs';
 import { montarRateio } from './lib/rateio.mjs';
 import { publicar } from './lib/publicar.mjs';
 import { abrirPainel } from './lib/painel.mjs';
+import { montarWorker, configurarEnvio, configuracaoEnvio, linkPublico } from './lib/envio.mjs';
 
 const git = (...args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' });
 
@@ -365,12 +366,84 @@ async function cmdPainel() {
   // o processo segue vivo servindo o painel até Ctrl+C ou "Fechar" na página
 }
 
+// ---------------------------------------------------------------- formulário de envio
+
+async function cmdEnvio() {
+  const r = await montarWorker();
+  const cfg = configuracaoEnvio();
+
+  console.log(`
+  ── Formulário público de envio ─────────────────────────
+
+  ✓ arquivo gerado: envio/dist/worker.js  (${(r.bytes / 1024).toFixed(0)} KB)`);
+
+  if (r.chaveNova) {
+    console.log(`  ✓ par de chaves criado, guardado em local/segredos.json
+
+    A chave privada fica só aí. Sem ela, nenhum envio recebido pode ser
+    aberto — nem por você, nem por ninguém.`);
+  }
+
+  if (cfg.url) {
+    console.log(`
+  Recebedor já configurado: ${cfg.url}
+  Link para divulgar:       ${linkPublico()}
+
+  Republicou o Worker? Suba o arquivo novo na Cloudflare; nada mais muda.
+`);
+    return;
+  }
+
+  console.log(`
+  Falta publicar o recebedor. Uma vez só, na Cloudflare:
+
+   1. Crie a conta em dash.cloudflare.com. O plano gratuito basta, e ao
+      contrário do da Vercel ele permite uso comercial.
+
+   2. Em R2, crie um bucket chamado   heli-envios
+
+   3. Em Workers & Pages, crie um Worker. Apague o código de exemplo e cole
+      o conteúdo de   envio/dist/worker.js
+
+   4. Nas configurações do Worker, adicione:
+        · Binding de R2 — nome ENVIOS, apontando para heli-envios
+        · Variável SEGREDO_ADMIN — uma senha longa e aleatória
+        · Variável CODIGO — uma palavra curta, que vai no link divulgado
+
+   5. Volte aqui e registre o endereço:
+
+        node heli.mjs envio-config
+`);
+}
+
+async function cmdEnvioConfig() {
+  const cfg = configuracaoEnvio();
+  console.log(`
+  ── Endereço do recebedor ───────────────────────────────
+`);
+  const url = await pergunta('  URL do Worker (ex.: https://heli-envios.suaconta.workers.dev)', cfg.url);
+  const segredo = await senhaOculta('  SEGREDO_ADMIN (o mesmo que está na Cloudflare)');
+  const codigo = await pergunta('  CODIGO do link (enter p/ nenhum)', cfg.codigo);
+
+  configurarEnvio({ url, segredo: segredo || undefined, codigo });
+  console.log(`
+  ✓ registrado.
+
+  Divulgue este link a quem for mandar nota:
+
+    ${linkPublico()}
+
+  Os envios chegam na Caixa de Entrada do painel.
+`);
+}
+
 // ---------------------------------------------------------------- roteador
 
 const AJUDA = `
   heli — prestação de contas
 
     node heli.mjs painel     abre o painel no navegador  ← o jeito fácil
+    node heli.mjs envio      gera o formulário público de envio de notas
     node heli.mjs init       configuração inicial (senhas + ledger)
     node heli.mjs socios     define os sócios e suas quotas
     node heli.mjs add        registra um lançamento pelo terminal
@@ -386,6 +459,7 @@ const AJUDA = `
 const cmd = process.argv[2];
 const rotas = {
   init: cmdInit, painel: cmdPainel, ui: cmdPainel,
+  envio: cmdEnvio, 'envio-config': cmdEnvioConfig,
   add: cmdAdd, novo: cmdAdd, list: cmdList, ls: cmdList,
   socios: cmdSocios, acerto: () => mostrarAcerto(lerLedger()),
   rm: () => cmdRm(process.argv[3]), build, publish: cmdPublish, senha: cmdSenha, restore: cmdRestore,

@@ -130,13 +130,83 @@ Em cada item você tem três saídas:
 descartado, vai para `descartadas`. A trilha de quem mandou o quê e quando fica
 preservada na própria pasta.
 
-### Por que não um formulário na internet
+### Pasta ou formulário na internet?
 
-Um formulário público exigiria servidor, banco e contas de usuário — e os seus dados
-deixariam de ser ilegíveis para quem hospeda. A pasta compartilhada resolve a mesma
-necessidade sem abrir mão disso. Quando a operação exigir que cada sócio lance
-sozinho, com acesso próprio e trilha de auditoria, aí sim vale a conversa sobre
-migrar para uma arquitetura com backend.
+São dois canais, e convivem. A pasta compartilhada serve quem você conhece e a quem
+dá acesso: sócios, secretária, contador. O **formulário público**, descrito na seção
+seguinte, serve quem não tem acesso a nada — fornecedor, prestador eventual, alguém
+que mandou uma nota uma vez só.
+
+A pasta não exige publicar nada e resolve o caso do dia a dia. O formulário exige uma
+conta na Cloudflare, mas dispensa a outra pessoa de ter qualquer acesso seu.
+
+---
+
+## Formulário público — quem não tem acesso ao sistema
+
+Para fornecedor, contador ou qualquer pessoa de fora: um endereço na internet onde
+ela preenche quem é, do que se trata e o valor, anexa a nota e envia. Nenhuma conta,
+nenhuma senha, nenhum aplicativo. Os envios aparecem na Caixa de Entrada do painel,
+e você continua sendo o único que lança.
+
+### O sigilo continua de pé
+
+O conteúdo é cifrado **no aparelho de quem envia**, com uma chave pública embutida na
+página. O servidor que recebe guarda bytes que ele mesmo não lê — nem a Cloudflare,
+nem quem tiver acesso ao painel daquela conta. Só a chave privada, que vive em
+`local/segredos.json`, abre um envio.
+
+É o mesmo princípio do site de consulta, invertido: lá o conteúdo é cifrado aqui e
+aberto por quem tem a senha; aqui é cifrado lá fora e aberto só por você.
+
+### Publicar o recebedor
+
+```powershell
+node heli.mjs envio
+```
+
+Gera `envio/dist/worker.js` e imprime o passo a passo. Resumo do que é feito uma vez
+só, na Cloudflare:
+
+1. Conta em `dash.cloudflare.com` — o plano gratuito basta. **Escolhemos Cloudflare
+   em vez de Vercel porque o plano gratuito da Vercel proíbe uso comercial**, e a
+   operação é uma empresa.
+2. Em R2, um bucket chamado `heli-envios`.
+3. Em Workers & Pages, um Worker com o conteúdo de `envio/dist/worker.js`.
+4. Nas configurações do Worker: binding de R2 `ENVIOS` → `heli-envios`, variável
+   `SEGREDO_ADMIN` (senha longa e aleatória) e `CODIGO` (palavra curta que vai no link).
+5. De volta aqui: `node heli.mjs envio-config` registra o endereço e imprime o link
+   para divulgar.
+
+O gratuito da Cloudflare cobre 100 mil requisições por dia e 10 GB no R2 — ordens de
+grandeza acima do que uma operação deste porte consome.
+
+### O código no link
+
+O link divulgado tem a forma `.../?c=palavra`. Não é proteção criptográfica: serve
+para que o endereço, se descoberto por acaso, não vire caixa de spam. Trocar o código
+na Cloudflare invalida os links antigos.
+
+### O que acontece quando um envio chega
+
+Na Caixa de Entrada aparece o protocolo, o tamanho e a data — **o conteúdo só é
+revelado quando você clica em Abrir**, porque é nesse momento que ele é baixado e
+decifrado aqui na sua máquina. Abrindo, os arquivos vão para o formulário e passam
+pela leitura automática de sempre.
+
+Quando a nota responde um campo, o dado dela prevalece sobre o que a pessoa digitou —
+o XML é autoridade, o texto livre não. Mas nada do que ela escreveu se perde: o que
+não virou campo desce para a observação, junto com o nome e o contato de quem enviou.
+
+Depois de lançado, o envio é apagado do recebedor. O comprovante fica anexado ao
+lançamento, como qualquer outra nota.
+
+### Se você perder a chave privada
+
+Envios que ainda estiverem no recebedor tornam-se ilegíveis para sempre — não há
+recuperação, por construção. `local/segredos.json` é a única cópia, e ele está no
+OneDrive. Gerar um par novo não recupera envios antigos: exige republicar o Worker e
+pedir reenvio.
 
 ---
 
@@ -255,6 +325,8 @@ antigos antes de trocar o padrão.
 | Comando | O que faz |
 |---|---|
 | `node heli.mjs painel` | Abre o painel no navegador. O jeito fácil. |
+| `node heli.mjs envio` | Gera o formulário público de envio de notas. |
+| `node heli.mjs envio-config` | Registra o endereço do recebedor e imprime o link. |
 | `node heli.mjs init` | Configuração inicial: define as duas senhas e cria o ledger. Roda uma vez só. |
 | `node heli.mjs socios` | Define os sócios e suas quotas de rateio. |
 | `node heli.mjs add` | Registra um lançamento (interativo). |

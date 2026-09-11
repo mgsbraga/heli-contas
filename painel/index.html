@@ -191,6 +191,23 @@
   .item .corpo { flex: 1 1 260px; min-width: 0; }
   .item .botoes { display: flex; gap: 7px; }
 
+  .grupo-titulo {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--txt-3); margin: 4px 0 10px; display: flex; align-items: center; gap: 9px;
+  }
+  .grupo-titulo:not(:first-child) { margin-top: 22px; }
+  .item .de { font-size: 12px; color: var(--txt-2); margin-top: 3px; }
+  .item .assunto { font-size: 12.5px; color: var(--txt-2); margin-top: 3px; }
+  .link-envio {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    font-size: 12px; color: var(--txt-3); margin-bottom: 12px;
+  }
+  .link-envio code {
+    font-family: var(--mono); font-size: 11.5px; color: var(--accent);
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 5px; padding: 3px 8px; word-break: break-all;
+  }
+
   /* leitura de nota */
   .chave-status { font-size: 12px; margin-top: 6px; min-height: 16px; color: var(--txt-3); }
   .chave-status.ok { color: var(--ok); }
@@ -261,6 +278,7 @@
   <!-- ---------- caixa de entrada ---------- -->
   <div class="card" id="cardEntrada">
     <h2>Caixa de entrada <span class="tag" id="contagemEntrada"></span></h2>
+    <div id="enviosConteudo"></div>
     <div id="entradaConteudo"></div>
   </div>
 
@@ -728,6 +746,7 @@ function limpar() {
   ANEXOS = [];
   EDITANDO = null;
   ORIGEM_ENTRADA = null;
+  ORIGEM_ENVIO = null;
   pintarAnexos();
   $('#erros').innerHTML = '';
   $('#leitura').innerHTML = '';
@@ -814,13 +833,18 @@ $('#form').addEventListener('submit', async (e) => {
     }
     const editado = r.editado;
     const veioDaEntrada = ORIGEM_ENTRADA;
+    const veioDoEnvio = ORIGEM_ENVIO;
+    if (veioDoEnvio) {
+      // lancado e guardado aqui: nao precisa mais ficar no recebedor
+      await api('/api/envio/apagar', { chave: veioDoEnvio }).catch(() => {});
+    }
     if (veioDaEntrada) {
       // o original nao e apagado: vai para "processadas", preservando a trilha
       await api('/api/entrada/arquivar', { nome: veioDaEntrada, destino: 'processadas' }).catch(() => {});
     }
     limpar();
     await carregar();
-    if (veioDaEntrada) await carregarEntrada();
+    if (veioDaEntrada || veioDoEnvio) await atualizarCaixa();
     aviso(editado ? `${r.id} atualizado.` : `${r.id} lançado. Clique em Publicar quando quiser subir.`, 'bom');
   } catch (err) {
     aviso(err.message, 'ruim');
@@ -940,6 +964,132 @@ function pintarAcerto() {
   el.innerHTML = linhas + '<div style="height:10px"></div>' + acertos;
 }
 
+// ---------------------------------------------------------------- formulário público
+
+let ORIGEM_ENVIO = null;     // envio web que deu origem ao lançamento em edição
+
+/** Atualiza as duas origens e o contador do cabeçalho, sempre juntos. */
+async function atualizarCaixa() {
+  QTD_ENVIOS = await carregarEnvios();
+  await carregarEntrada();
+}
+
+let QTD_ENVIOS = 0;
+
+async function carregarEnvios() {
+  const cont = $('#enviosConteudo');
+  const cfg = EST?.envio || {};
+  if (!cfg.url) { cont.innerHTML = ''; return 0; }
+
+  let e;
+  try { e = await api('/api/envios'); }
+  catch (err) { e = { ativo: false, erro: err.message, itens: [] }; }
+
+  const cabecalho = `
+    <div class="grupo-titulo">do formulário na internet</div>
+    <div class="link-envio">
+      <span>link para divulgar</span><code>${esc(cfg.link || cfg.url)}</code>
+      <button class="btn btn-ghost btn-mini" type="button" id="btnCopiarLink">copiar</button>
+      <button class="btn btn-ghost btn-mini" type="button" id="btnAtualizarEnvios">atualizar</button>
+    </div>`;
+
+  if (!e.ativo) {
+    cont.innerHTML = cabecalho +
+      `<div class="entrada-vazia">Não consegui falar com o recebedor: ${esc(e.erro || 'sem resposta')}</div>`;
+  } else if (!e.itens.length) {
+    cont.innerHTML = cabecalho + '<div class="entrada-vazia">Nenhum envio novo.</div>';
+  } else {
+    cont.innerHTML = cabecalho + `<div class="itens">${e.itens.map(envioHtml).join('')}</div>`;
+  }
+
+  $('#btnCopiarLink')?.addEventListener('click', () => {
+    navigator.clipboard?.writeText(cfg.link || cfg.url)
+      .then(() => aviso('Link copiado.', 'bom'))
+      .catch(() => aviso('Copie o link manualmente da tela.', 'ruim'));
+  });
+  $('#btnAtualizarEnvios')?.addEventListener('click', atualizarCaixa);
+  $$('[data-envio]').forEach((b) => b.addEventListener('click', () => abrirEnvio(b.dataset.envio)));
+  $$('[data-envio-apagar]').forEach((b) => b.addEventListener('click', () => apagarEnvioWeb(b.dataset.envioApagar)));
+
+  return e.itens.length;
+}
+
+function envioHtml(it) {
+  const quando = new Date(it.recebidoEm);
+  return `
+    <div class="item">
+      <div class="corpo">
+        <div class="nome">Protocolo ${esc(it.protocolo)}</div>
+        <div class="meta">${tamanho(it.tamanho)} · recebido em ${quando.toLocaleDateString('pt-BR')} ${quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+        <div class="assunto">conteúdo cifrado — abra para ver quem enviou e o quê</div>
+      </div>
+      <div class="botoes">
+        <button class="btn btn-mini" type="button" data-envio="${esc(it.chave)}">Abrir e lançar</button>
+        <button class="btn btn-perigo btn-mini" type="button" data-envio-apagar="${esc(it.chave)}">Descartar</button>
+      </div>
+    </div>`;
+}
+
+/** Decifra no processo local, joga os arquivos no formulário e preenche o resto. */
+async function abrirEnvio(chave) {
+  try {
+    aviso('Baixando e decifrando…');
+    const r = await api('/api/envio/abrir', { chave });
+    if (!r.ok) return aviso(r.erro, 'ruim');
+
+    limpar();
+    const arquivos = (r.arquivos || []).map((a) => {
+      const bin = atob(a.dataB64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new File([bytes], a.nome, { type: a.mime || 'application/octet-stream' });
+    });
+    await lerArquivos(arquivos);
+
+    // o que a pessoa escreveu entra só onde a nota não respondeu
+    const m = r.metadados || {};
+    const talvez = (sel, v) => {
+      if (!v) return false;
+      const el = $(sel);
+      if (el.value.trim() && el.value !== el.dataset.padrao) return false;
+      el.value = v;
+      if (sel !== '#chave') el.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    };
+    talvez('#fornecedor', m.quem);
+    talvez('#valor', m.valor);
+    const assuntoVirouDescricao = talvez('#descricao', m.assunto);
+
+    // O que a pessoa escreveu nunca se perde: se a nota já respondeu o campo,
+    // o texto dela desce para a observação em vez de ser descartado.
+    const notas = [];
+    if (m.quem || m.contato) {
+      notas.push(`Enviado por ${m.quem || 'terceiro'}${m.contato ? ` (${m.contato})` : ''}`);
+    }
+    if (m.assunto && !assuntoVirouDescricao) notas.push(`Disse ser: ${m.assunto}`);
+    if (notas.length) {
+      const obs = $('#obs');
+      obs.value = [obs.value.trim(), ...notas].filter(Boolean).join('\n');
+    }
+
+    ORIGEM_ENVIO = chave;
+    $('#tituloForm').textContent = 'Lançando de envio recebido';
+    $('#tagEdicao').textContent = (r.metadados?.quem || chave).slice(0, 40);
+    window.scrollTo({ top: $('#form').offsetTop - 80, behavior: 'smooth' });
+    aviso('Envio aberto. Confira e complete o que faltar.', 'bom');
+  } catch (err) { aviso(err.message, 'ruim'); }
+}
+
+async function apagarEnvioWeb(chave) {
+  if (!confirm('Descartar este envio?\n\nEle é apagado do recebedor e não volta.')) return;
+  try {
+    const r = await api('/api/envio/apagar', { chave });
+    if (r.ok === false) return aviso(r.erro, 'ruim');
+    await atualizarCaixa();
+    aviso('Envio descartado.', 'bom');
+  } catch (err) { aviso(err.message, 'ruim'); }
+}
+
 // ---------------------------------------------------------------- caixa de entrada
 
 let ORIGEM_ENTRADA = null;   // arquivo da entrada que deu origem ao lançamento em edição
@@ -950,7 +1100,9 @@ async function carregarEntrada() {
   catch { $('#entradaConteudo').innerHTML = '<div class="entrada-vazia">Não consegui ler a pasta de entrada.</div>'; return; }
 
   const cont = $('#entradaConteudo');
-  $('#contagemEntrada').textContent = e.ativa && e.itens.length ? `${e.itens.length} aguardando` : '';
+  const daPasta = e.ativa ? e.itens.length : 0;
+  const total = daPasta + QTD_ENVIOS;
+  $('#contagemEntrada').textContent = total ? `${total} aguardando` : '';
 
   if (!e.ativa) {
     cont.innerHTML = `
@@ -974,6 +1126,7 @@ async function carregarEntrada() {
   }
 
   const cabecalho = `
+    ${EST?.envio?.url ? '<div class="grupo-titulo">da pasta compartilhada</div>' : ''}
     <div class="entrada-pasta">
       <span>lendo de</span><code>${esc(e.pasta)}</code>
       <button class="btn btn-ghost btn-mini" type="button" id="btnAtualizarEntrada">atualizar</button>
@@ -984,7 +1137,7 @@ async function carregarEntrada() {
     ? `<div class="itens">${e.itens.map(itemHtml).join('')}</div>`
     : '<div class="entrada-vazia">Nada aguardando. O que for depositado nessa pasta aparece aqui.</div>');
 
-  $('#btnAtualizarEntrada').addEventListener('click', carregarEntrada);
+  $('#btnAtualizarEntrada').addEventListener('click', atualizarCaixa);
   $('#btnTrocarPasta').addEventListener('click', async () => {
     const nova = prompt('Caminho da pasta de entrada (vazio desliga a caixa de entrada):', e.pasta);
     if (nova === null) return;
@@ -1056,7 +1209,7 @@ async function descartarDaEntrada(nome) {
   if (!confirm(`Descartar "${nome}"?\n\nO arquivo não é apagado — vai para a subpasta "descartadas".`)) return;
   try {
     await api('/api/entrada/arquivar', { nome, destino: 'descartadas' });
-    await carregarEntrada();
+    await atualizarCaixa();
     aviso('Movido para "descartadas".', 'bom');
   } catch (err) { aviso(err.message, 'ruim'); }
 }
@@ -1090,7 +1243,7 @@ $('#btnFechar').addEventListener('click', async () => {
 // carrega o estado antes de montar o formulário — as opções de rateio dependem dele
 carregar()
   .then(limpar)
-  .then(carregarEntrada)
+  .then(atualizarCaixa)
   .catch((e) => aviso('Não foi possível carregar o painel: ' + e.message, 'ruim'));
 </script>
 </body>

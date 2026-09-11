@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Envio de nota fiscal</title>
+<style>
+  :root {
+    --bg: #0a0e13; --painel: #111820; --painel2: #161f29;
+    --linha: #1f2b38; --txt: #e4ecf4; --txt2: #94a5b8; --txt3: #5f7186;
+    --acento: #f2a950; --acento-dim: #7a5827; --ok: #4ec9a0; --alerta: #e8825a;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--txt);
+    font: 400 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+    padding: 28px 20px 70px;
+  }
+  .folha { max-width: 540px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 28px; }
+  .marca { width: 42px; height: 42px; color: var(--acento); margin: 0 auto 14px; display: block; }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .org { font-size: 13px; color: var(--txt3); }
+
+  .nota {
+    background: var(--painel); border: 1px solid var(--linha);
+    border-radius: 10px; padding: 14px 17px; margin-bottom: 24px;
+    font-size: 13px; color: var(--txt2); line-height: 1.65;
+  }
+  .nota b { color: var(--txt); font-weight: 600; }
+
+  label { display: block; font-size: 12px; color: var(--txt3); margin: 0 0 6px; }
+  label .obr { color: var(--acento); }
+  .campo { margin-bottom: 17px; }
+  input, textarea {
+    width: 100%; background: var(--painel2); border: 1px solid var(--linha);
+    color: var(--txt); border-radius: 9px; padding: 12px 13px;
+    font: inherit; outline: none; transition: border-color .15s;
+  }
+  input:focus, textarea:focus { border-color: var(--acento-dim); }
+  input::placeholder, textarea::placeholder { color: #47576a; }
+  textarea { resize: vertical; min-height: 78px; }
+
+  .zona {
+    border: 1px dashed var(--linha); border-radius: 10px;
+    padding: 26px 18px; text-align: center; color: var(--txt3);
+    font-size: 14px; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .zona:hover, .zona.sobre { border-color: var(--acento-dim); background: var(--painel2); color: var(--txt2); }
+  .zona b { color: var(--txt2); font-weight: 500; display: block; margin-bottom: 3px; }
+  .zona small { font-size: 12px; }
+
+  .arquivos { margin-top: 11px; display: flex; flex-direction: column; gap: 7px; }
+  .arq {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--painel2); border: 1px solid var(--linha);
+    border-radius: 8px; padding: 9px 10px 9px 13px; font-size: 13px; color: var(--txt2);
+  }
+  .arq .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arq .t { color: var(--txt3); font-size: 12px; }
+  .arq button {
+    background: transparent; border: 0; color: var(--txt3);
+    font-size: 17px; line-height: 1; padding: 3px 6px; border-radius: 5px; cursor: pointer;
+  }
+  .arq button:hover { color: var(--alerta); background: #1d1210; }
+
+  .btn {
+    width: 100%; background: var(--acento); color: #171104; border: 0;
+    border-radius: 9px; padding: 14px; font: 600 15px var(--sans);
+    cursor: pointer; margin-top: 8px; transition: opacity .15s;
+  }
+  .btn:hover:not(:disabled) { opacity: .9; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .recado { margin-top: 15px; font-size: 13.5px; min-height: 20px; }
+  .recado.ruim { color: var(--alerta); }
+  .recado.neutro { color: var(--txt3); }
+
+  .pronto { text-align: center; padding: 22px 0; }
+  .pronto .tique {
+    width: 52px; height: 52px; margin: 0 auto 18px; display: block; color: var(--ok);
+  }
+  .pronto h2 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
+  .pronto p { color: var(--txt2); font-size: 14px; margin: 0 0 20px; }
+  .protocolo {
+    font-family: var(--mono); font-size: 15px; color: var(--acento);
+    background: var(--painel2); border: 1px solid var(--acento-dim);
+    border-radius: 9px; padding: 13px; margin-bottom: 22px; word-break: break-all;
+  }
+  .rodape {
+    margin-top: 30px; text-align: center;
+    font-size: 11.5px; color: var(--txt3); line-height: 1.7;
+  }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<div class="folha">
+
+  <header>
+    <svg class="marca" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 12h36M24 12v5"/>
+      <path d="M13 22h16a5 5 0 0 1 5 5v4H18a5 5 0 0 1-5-5v-4Z"/>
+      <path d="M34 27h6l-3 4h-3M16 31v5M13 36h8"/>
+    </svg>
+    <h1>Envio de nota fiscal</h1>
+    <div class="org">Heli Eagle</div>
+  </header>
+
+  <div id="tela">
+    <div class="nota">
+      Envie aqui a nota referente ao serviço ou produto fornecido.
+      <b>Se você tiver o arquivo XML da nota, mande ele</b> — é o que evita erro de digitação
+      no nosso lado. Não tendo, o PDF ou uma foto legível resolvem.
+    </div>
+
+    <form id="form" autocomplete="off">
+      <div class="campo">
+        <label for="quem">Seu nome ou o da empresa <span class="obr">*</span></label>
+        <input type="text" id="quem" required placeholder="Aviation Fuel Services Ltda">
+      </div>
+
+      <div class="campo">
+        <label for="contato">E-mail ou telefone <span style="opacity:.7">— caso precisemos confirmar algo</span></label>
+        <input type="text" id="contato" placeholder="financeiro@empresa.com.br">
+      </div>
+
+      <div class="campo">
+        <label for="assunto">Do que se trata <span class="obr">*</span></label>
+        <textarea id="assunto" required placeholder="Abastecimento do dia 08/09, NF-e 12014"></textarea>
+      </div>
+
+      <div class="campo">
+        <label for="valor">Valor <span style="opacity:.7">— se souber</span></label>
+        <input type="text" id="valor" inputmode="decimal" placeholder="7.431,90">
+      </div>
+
+      <div class="campo">
+        <label>Arquivos <span class="obr">*</span></label>
+        <div class="zona" id="zona">
+          <b>Toque para escolher a nota</b>
+          <small>XML, PDF ou foto · pode mandar mais de um</small>
+        </div>
+        <input type="file" id="arquivo" multiple class="oculto"
+               accept=".xml,.pdf,.jpg,.jpeg,.png,.webp,.heic">
+        <div class="arquivos" id="arquivos"></div>
+      </div>
+
+      <button class="btn" type="submit" id="btn">Enviar nota</button>
+      <div class="recado" id="recado"></div>
+    </form>
+  </div>
+
+  <div id="sucesso" class="pronto oculto">
+    <svg class="tique" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="26" cy="26" r="23"/><path d="M16 27l7 7 14-15"/>
+    </svg>
+    <h2>Nota recebida</h2>
+    <p>Guarde o número do protocolo. Se precisar falar sobre este envio, é por ele que a gente se localiza.</p>
+    <div class="protocolo" id="protocolo"></div>
+    <button class="btn" type="button" id="btnOutra">Enviar outra nota</button>
+  </div>
+
+  <div class="rodape">
+    O conteúdo é cifrado neste dispositivo antes de sair daqui.<br>
+    Nem o servidor que recebe consegue ler o que você enviou.
+  </div>
+
+</div>
+
+<script>
+const CHAVE_PUBLICA = __CHAVE_PUBLICA_JSON__;
+const CODIGO = __CODIGO_NA_URL__;
+
+const $ = (s) => document.querySelector(s);
+const ALG = { name: 'RSA-OAEP', hash: 'SHA-256' };
+const LIMITE_TOTAL = 20 * 1024 * 1024;
+
+let ARQUIVOS = [];
+
+const tamanho = (b) =>
+  b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+function b64de(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+function pintar() {
+  $('#arquivos').innerHTML = ARQUIVOS.map((a, i) => `
+    <div class="arq">
+      <span class="n">${esc(a.name)}</span>
+      <span class="t">${tamanho(a.size)}</span>
+      <button type="button" data-i="${i}" aria-label="remover">&times;</button>
+    </div>`).join('');
+  $('#arquivos').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    ARQUIVOS.splice(Number(b.dataset.i), 1);
+    pintar();
+  }));
+}
+
+function adicionar(lista) {
+  for (const f of lista) {
+    if (ARQUIVOS.some((a) => a.name === f.name && a.size === f.size)) continue;
+    ARQUIVOS.push(f);
+  }
+  pintar();
+}
+
+$('#zona').addEventListener('click', () => $('#arquivo').click());
+$('#arquivo').addEventListener('change', (e) => { adicionar(e.target.files); e.target.value = ''; });
+['dragenter', 'dragover'].forEach((ev) => $('#zona').addEventListener(ev, (e) => {
+  e.preventDefault(); $('#zona').classList.add('sobre');
+}));
+['dragleave', 'drop'].forEach((ev) => $('#zona').addEventListener(ev, (e) => {
+  e.preventDefault(); $('#zona').classList.remove('sobre');
+}));
+$('#zona').addEventListener('drop', (e) => adicionar(e.dataTransfer.files));
+['dragover', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault()));
+
+const lerB64 = (f) => new Promise((res, rej) => {
+  const fr = new FileReader();
+  fr.onload = () => res(String(fr.result).split(',')[1]);
+  fr.onerror = () => rej(new Error('Não consegui ler ' + f.name));
+  fr.readAsDataURL(f);
+});
+
+/**
+ * Cifra aqui mesmo, no aparelho de quem envia. Sorteia uma chave AES para este
+ * envio, fecha o conteúdo com ela, e manda a chave AES dentro do RSA — que só a
+ * chave privada do destinatário abre.
+ */
+async function empacotar(conteudo) {
+  const publica = await crypto.subtle.importKey('jwk', CHAVE_PUBLICA, ALG, false, ['encrypt']);
+  const aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, aes, new TextEncoder().encode(JSON.stringify(conteudo)),
+  );
+  const bruta = await crypto.subtle.exportKey('raw', aes);
+  return {
+    v: 1,
+    alg: 'RSA-OAEP-3072+AES-256-GCM',
+    chave: b64de(await crypto.subtle.encrypt(ALG, publica, bruta)),
+    iv: b64de(iv),
+    ct: b64de(ct),
+  };
+}
+
+function recado(txt, classe = 'neutro') {
+  $('#recado').textContent = txt;
+  $('#recado').className = 'recado ' + classe;
+}
+
+$('#form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!ARQUIVOS.length) return recado('Escolha ao menos um arquivo da nota.', 'ruim');
+
+  const total = ARQUIVOS.reduce((s, a) => s + a.size, 0);
+  if (total > LIMITE_TOTAL) {
+    return recado(`Os arquivos somam ${tamanho(total)}. O limite por envio é 20 MB — mande em partes.`, 'ruim');
+  }
+
+  $('#btn').disabled = true;
+  recado('Cifrando e enviando…');
+
+  try {
+    const conteudo = {
+      metadados: {
+        quem: $('#quem').value.trim(),
+        contato: $('#contato').value.trim(),
+        assunto: $('#assunto').value.trim(),
+        valor: $('#valor').value.trim(),
+        enviadoEm: new Date().toISOString(),
+      },
+      arquivos: [],
+    };
+    for (const f of ARQUIVOS) {
+      conteudo.arquivos.push({
+        nome: f.name,
+        mime: f.type || 'application/octet-stream',
+        tamanho: f.size,
+        dataB64: await lerB64(f),
+      });
+    }
+
+    const pacote = await empacotar(conteudo);
+    const r = await fetch('/enviar' + (CODIGO ? '?c=' + encodeURIComponent(CODIGO) : ''), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(pacote),
+    });
+    const resposta = await r.json().catch(() => ({}));
+    if (!r.ok || !resposta.ok) throw new Error(resposta.erro || 'Falha no envio. Tente de novo.');
+
+    $('#protocolo').textContent = resposta.protocolo;
+    $('#tela').classList.add('oculto');
+    $('#sucesso').classList.remove('oculto');
+    window.scrollTo(0, 0);
+  } catch (err) {
+    recado(err.message, 'ruim');
+  } finally {
+    $('#btn').disabled = false;
+  }
+});
+
+$('#btnOutra').addEventListener('click', () => {
+  ARQUIVOS = [];
+  $('#form').reset();
+  pintar();
+  recado('');
+  $('#sucesso').classList.add('oculto');
+  $('#tela').classList.remove('oculto');
+});
+</script>
+</body>
+</html>
