@@ -536,17 +536,49 @@ function rateioDoForm() {
 
 // ---------------------------------------------------------------- anexos
 
+const MIME_POR_EXT = {
+  pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  webp: 'image/webp', heic: 'image/heic', xml: 'text/xml', txt: 'text/plain',
+};
+const mimeDoNome = (nome) => MIME_POR_EXT[String(nome).split('.').pop().toLowerCase()] || '';
+const ehHeic = (a) => /heic|heif/i.test(a.mime || '') || /\.(heic|heif)$/i.test(a.nome || '');
+
+// Anexo ainda não gravado (recém-arrastado ou vindo de um envio) só existe em
+// memória: abre por um blob: local. O mapa fica fora do objeto para a URL nunca
+// ir junto no corpo do /api/gravar.
+const URL_BLOB = new WeakMap();
+function linkDoAnexo(a) {
+  if (a.arquivo) return `/api/anexo?arquivo=${encodeURIComponent(a.arquivo)}&k=${TOKEN}`;
+  if (!a.dataB64) return null;
+  if (!URL_BLOB.has(a)) {
+    const bin = atob(a.dataB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const tipo = (a.mime && a.mime !== 'application/octet-stream') ? a.mime : mimeDoNome(a.nome);
+    URL_BLOB.set(a, URL.createObjectURL(new Blob([bytes], { type: tipo || 'application/octet-stream' })));
+  }
+  return URL_BLOB.get(a);
+}
+function soltarBlob(a) {
+  const u = URL_BLOB.get(a);
+  if (u) { URL.revokeObjectURL(u); URL_BLOB.delete(a); }
+}
+
 function pintarAnexos() {
-  $('#anexos').innerHTML = ANEXOS.map((a, i) => `
+  $('#anexos').innerHTML = ANEXOS.map((a, i) => {
+    const href = linkDoAnexo(a);
+    // Chrome/Edge não exibem HEIC (foto de iPhone): baixa e abre no app Fotos
+    const baixar = ehHeic(a) ? ` download="${esc(a.nome)}" title="HEIC: o navegador não mostra; baixa e abre no Fotos"` : '';
+    return `
     <span class="anexo">
-      ${a.arquivo
-        ? `<a href="/api/anexo?arquivo=${encodeURIComponent(a.arquivo)}&k=${TOKEN}" target="_blank">${esc(a.nome)}</a>`
-        : esc(a.nome)}
+      ${href ? `<a href="${href}" target="_blank" rel="noopener"${baixar}>${esc(a.nome)}</a>` : esc(a.nome)}
       <span style="color:var(--txt-3)">${tamanho(a.tamanho)}</span>
       <button type="button" class="x" data-i="${i}" title="remover">&times;</button>
-    </span>`).join('');
+    </span>`;
+  }).join('');
   $$('#anexos .x').forEach((b) => b.addEventListener('click', () => {
-    ANEXOS.splice(Number(b.dataset.i), 1);
+    const [fora] = ANEXOS.splice(Number(b.dataset.i), 1);
+    if (fora) soltarBlob(fora);
     pintarAnexos();
   }));
 }
@@ -562,7 +594,7 @@ async function lerArquivos(lista) {
   for (const f of lista) {
     if (f.size > 20 * 1024 * 1024) { aviso(`"${f.name}" passa de 20 MB e foi ignorado.`, 'ruim'); continue; }
     const b64 = await comoB64(f);
-    ANEXOS.push({ nome: f.name, mime: f.type || 'application/octet-stream', tamanho: f.size, dataB64: b64 });
+    ANEXOS.push({ nome: f.name, mime: f.type || mimeDoNome(f.name) || 'application/octet-stream', tamanho: f.size, dataB64: b64 });
     pintarAnexos();
     await lerNotaDoArquivo(f, b64);
   }
@@ -596,7 +628,7 @@ async function qrDaImagem(file) {
 }
 
 async function lerNotaDoArquivo(f, b64) {
-  const ehImagem = /^image\//.test(f.type);
+  const ehImagem = /^image\//.test(f.type || mimeDoNome(f.name));
   const ehXml = /\.xml$/i.test(f.name) || /xml/i.test(f.type);
   const ehPdf = /\.pdf$/i.test(f.name) || /pdf/i.test(f.type);
   if (!ehImagem && !ehXml && !ehPdf) return;
@@ -1042,7 +1074,7 @@ async function abrirEnvio(chave) {
       const bin = atob(a.dataB64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return new File([bytes], a.nome, { type: a.mime || 'application/octet-stream' });
+      return new File([bytes], a.nome, { type: (a.mime && a.mime !== 'application/octet-stream' ? a.mime : mimeDoNome(a.nome)) || 'application/octet-stream' });
     });
     await lerArquivos(arquivos);
 
