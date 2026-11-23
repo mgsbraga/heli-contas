@@ -163,6 +163,23 @@
   .pill.pago { border-color: #23503f; color: var(--ok); }
   .pill.apagar { border-color: #5c3a2a; color: var(--warn); }
   .pill.reembolsar { border-color: var(--accent-dim); color: var(--accent); }
+  .pill.reembolsado { border-color: #2c4a5e; color: #8cc3e8; }
+  td.pag small { display: block; color: var(--txt-3); font-size: 11.5px; margin-top: 1px; }
+  td.sel, th.sel { width: 34px; padding-right: 0; }
+  td.sel input, th.sel input { width: auto; margin: 0; accent-color: var(--accent); cursor: pointer; }
+
+  /* reembolso: no formulário e no lote */
+  .reemb {
+    border: 1px solid #2c4a5e; border-radius: var(--radius); background: #0f1a24;
+    padding: 15px 16px 16px;
+  }
+  .reemb-tit { font-size: 12px; color: #8cc3e8; margin-bottom: 12px; font-weight: 500; }
+  .reemb-tit span { color: var(--txt-3); font-weight: 400; }
+  .reemb .zona { padding: 15px; }
+  .lote { margin-bottom: 14px; }
+  .lote-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--txt-2); }
+  .lote-topo b { color: var(--txt); font-weight: 600; }
+  .lote .reemb { margin-top: 12px; }
   .linha-acoes { display: flex; gap: 6px; justify-content: flex-end; }
   .clipe { color: var(--txt-3); font-size: 11.5px; }
   /* caixa de entrada */
@@ -342,7 +359,30 @@
             <option value="pago">pago</option>
             <option value="a pagar">a pagar</option>
             <option value="reembolsar">reembolsar</option>
+            <option value="reembolsado">reembolsado</option>
           </select>
+        </div>
+
+        <div class="c12 oculto" id="blocoReembolso">
+          <div class="reemb">
+            <div class="reemb-tit">Reembolso <span>· quem adiantou continua em "Quem pagou"; no acerto conta quem reembolsou</span></div>
+            <div class="grade">
+              <div class="c4">
+                <label for="reembPor">Quem reembolsou</label>
+                <input list="lPagadores" id="reembPor" placeholder="escolha ou digite">
+              </div>
+              <div class="c3">
+                <label for="reembData">Data do reembolso</label>
+                <input type="date" id="reembData">
+              </div>
+              <div class="c12">
+                <label>Comprovantes do reembolso <span class="op">· PIX, TED, recibo — PDF ou foto</span></label>
+                <div class="zona" id="zonaComp"><b>Arraste o comprovante aqui</b> ou clique para escolher</div>
+                <input type="file" id="arquivoComp" multiple class="oculto" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.txt">
+                <div class="anexos" id="comprovantes"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="c12">
@@ -392,10 +432,44 @@
   <!-- ---------- lista ---------- -->
   <div class="card">
     <h2>Lançamentos <span class="tag" id="contagem"></span></h2>
+
+    <div class="lote oculto" id="lote">
+      <div class="lote-topo">
+        <span id="loteResumo"></span>
+        <button class="btn btn-mini" type="button" id="btnLoteAbrir">Marcar como reembolsados</button>
+        <button class="btn btn-ghost btn-mini" type="button" id="btnLoteLimpar">Desmarcar</button>
+      </div>
+      <div class="reemb oculto" id="loteForm">
+        <div class="reemb-tit">Reembolso em lote <span>· os mesmos comprovantes ficam ligados a todos os lançamentos marcados</span></div>
+        <div class="grade">
+          <div class="c4">
+            <label for="lotePor">Quem reembolsou</label>
+            <input list="lPagadores" id="lotePor" placeholder="escolha ou digite">
+          </div>
+          <div class="c3">
+            <label for="loteData">Data do reembolso</label>
+            <input type="date" id="loteData">
+          </div>
+          <div class="c12">
+            <label>Comprovantes do reembolso <span class="op">· PIX, TED, recibo — PDF ou foto</span></label>
+            <div class="zona" id="zonaLote"><b>Arraste o comprovante aqui</b> ou clique para escolher</div>
+            <input type="file" id="arquivoLote" multiple class="oculto" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.txt">
+            <div class="anexos" id="comprovantesLote"></div>
+          </div>
+        </div>
+        <div id="errosLote"></div>
+        <div class="acoes">
+          <button class="btn" type="button" id="btnLoteConfirmar">Confirmar reembolso</button>
+          <button class="btn btn-ghost" type="button" id="btnLoteCancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="tbl">
       <table>
         <thead>
           <tr>
+            <th class="sel"><input type="checkbox" id="selTodos" title="selecionar todos os &quot;reembolsar&quot;"></th>
             <th>ID</th><th>Data</th><th>Descrição</th><th>Pagador</th>
             <th>Status</th><th class="num">Valor</th><th></th>
           </tr>
@@ -433,6 +507,10 @@ const tamanho = (b) => !b ? '' : b < 1024 ? b + ' B' : b < 1048576 ? (b/1024).to
 
 let EST = null;          // estado vindo do servidor
 let ANEXOS = [];         // anexos do formulário em edição
+let COMPROVANTES = [];   // comprovantes do reembolso no formulário
+let LOTE_COMP = [];      // comprovantes do reembolso em lote
+const SEL = new Set();   // lançamentos marcados para reembolso em lote
+const hoje = () => new Date().toISOString().slice(0, 10);
 let EDITANDO = null;     // id sendo editado, ou null
 
 async function api(rota, corpo) {
@@ -528,7 +606,10 @@ function somarPct() {
 function rateioDoForm() {
   const modo = $('input[name="modoRateio"]:checked')?.value;
   if (!modo || modo === 'quotas') return null;
-  if (modo === 'pagador') return [{ socio: $('#pagador').value.trim(), pct: 100 }];
+  if (modo === 'pagador') {
+    const reemb = $('#status').value === 'reembolsado' && $('#reembPor').value.trim();
+    return [{ socio: reemb || $('#pagador').value.trim(), pct: 100 }];
+  }
   return $$('.pctIn')
     .map((i) => ({ socio: i.dataset.socio, pct: Number(i.value) || 0 }))
     .filter((r) => r.pct > 0);
@@ -564,8 +645,12 @@ function soltarBlob(a) {
   if (u) { URL.revokeObjectURL(u); URL_BLOB.delete(a); }
 }
 
-function pintarAnexos() {
-  $('#anexos').innerHTML = ANEXOS.map((a, i) => {
+function pintarAnexos() { pintarLista('#anexos', ANEXOS, pintarAnexos); }
+function pintarComprovantes() { pintarLista('#comprovantes', COMPROVANTES, pintarComprovantes); }
+function pintarLote() { pintarLista('#comprovantesLote', LOTE_COMP, pintarLote); }
+
+function pintarLista(alvo, lista, repintar) {
+  $(alvo).innerHTML = lista.map((a, i) => {
     const href = linkDoAnexo(a);
     // Chrome/Edge não exibem HEIC (foto de iPhone): baixa e abre no app Fotos
     const baixar = ehHeic(a) ? ` download="${esc(a.nome)}" title="HEIC: o navegador não mostra; baixa e abre no Fotos"` : '';
@@ -576,11 +661,38 @@ function pintarAnexos() {
       <button type="button" class="x" data-i="${i}" title="remover">&times;</button>
     </span>`;
   }).join('');
-  $$('#anexos .x').forEach((b) => b.addEventListener('click', () => {
-    const [fora] = ANEXOS.splice(Number(b.dataset.i), 1);
+  $$(alvo + ' .x').forEach((b) => b.addEventListener('click', () => {
+    const [fora] = lista.splice(Number(b.dataset.i), 1);
     if (fora) soltarBlob(fora);
-    pintarAnexos();
+    repintar();
   }));
+}
+
+/** Comprovante não passa pela leitura de nota: só entra na lista. */
+async function juntarComprovantes(arquivos, lista, repintar) {
+  for (const f of arquivos) {
+    if (f.size > 20 * 1024 * 1024) { aviso(`"${f.name}" passa de 20 MB e foi ignorado.`, 'ruim'); continue; }
+    lista.push({ nome: f.name, mime: f.type || mimeDoNome(f.name) || 'application/octet-stream', tamanho: f.size, dataB64: await comoB64(f) });
+    repintar();
+  }
+}
+
+function ligarZona(zona, input, aoReceber) {
+  $(zona).addEventListener('click', () => $(input).click());
+  $(input).addEventListener('change', (e) => { aoReceber(e.target.files); e.target.value = ''; });
+  ['dragenter', 'dragover'].forEach((ev) => $(zona).addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation(); $(zona).classList.add('sobre');
+  }));
+  ['dragleave', 'drop'].forEach((ev) => $(zona).addEventListener(ev, (e) => {
+    e.preventDefault(); $(zona).classList.remove('sobre');
+  }));
+  $(zona).addEventListener('drop', (e) => { e.stopPropagation(); aoReceber(e.dataTransfer.files); });
+}
+
+function mostrarReembolso() {
+  const on = $('#status').value === 'reembolsado';
+  $('#blocoReembolso').classList.toggle('oculto', !on);
+  if (on && !$('#reembData').value) $('#reembData').value = hoje();
 }
 
 const comoB64 = (f) => new Promise((res, rej) => {
@@ -755,6 +867,9 @@ $('#chave').addEventListener('input', () => {
   window._chaveTimer = setTimeout(() => validarChave({ preencher: true }), 250);
 });
 
+ligarZona('#zonaComp', '#arquivoComp', (fs) => juntarComprovantes(fs, COMPROVANTES, pintarComprovantes));
+ligarZona('#zonaLote', '#arquivoLote', (fs) => juntarComprovantes(fs, LOTE_COMP, pintarLote));
+$('#status').addEventListener('change', mostrarReembolso);
 $('#zona').addEventListener('click', () => $('#arquivo').click());
 $('#arquivo').addEventListener('change', (e) => { lerArquivos(e.target.files); e.target.value = ''; });
 ['dragenter', 'dragover'].forEach((ev) => $('#zona').addEventListener(ev, (e) => {
@@ -776,10 +891,13 @@ function limpar() {
   $('#tipoDoc').value = 'NF-e';
   $('#tipoDoc').dataset.padrao = 'NF-e';
   ANEXOS = [];
+  COMPROVANTES = [];
   EDITANDO = null;
   ORIGEM_ENTRADA = null;
   ORIGEM_ENVIO = null;
   pintarAnexos();
+  pintarComprovantes();
+  mostrarReembolso();
   $('#erros').innerHTML = '';
   $('#leitura').innerHTML = '';
   $('#chaveStatus').textContent = '';
@@ -811,6 +929,11 @@ function editar(id) {
   $('#obs').value = l.obs || '';
   ANEXOS = (l.anexos || []).map((a) => ({ ...a }));
   pintarAnexos();
+  $('#reembPor').value = l.reembolso?.por || '';
+  $('#reembData').value = l.reembolso?.data || '';
+  COMPROVANTES = (l.reembolso?.comprovantes || []).map((a) => ({ ...a }));
+  pintarComprovantes();
+  mostrarReembolso();
   validarChave();
 
   if ((EST.socios || []).length) {
@@ -857,6 +980,9 @@ $('#form').addEventListener('submit', async (e) => {
       rateio: rateioDoForm(),
       obs: $('#obs').value,
       anexos: ANEXOS,
+      reembolso: $('#status').value === 'reembolsado'
+        ? { por: $('#reembPor').value.trim(), data: $('#reembData').value, comprovantes: COMPROVANTES }
+        : null,
     });
 
     if (!r.ok) {
@@ -895,17 +1021,27 @@ function montarTabela() {
   $('#contagem').textContent = L.length ? `${L.length} · ${brl(L.reduce((s, l) => s + l.valor, 0))}` : '';
   const tb = $('#corpo');
   if (!L.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="vazio">Nenhum lançamento ainda. Preencha o formulário acima.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" class="vazio">Nenhum lançamento ainda. Preencha o formulário acima.</td></tr>';
+    pintarSelecao();
     return;
   }
+  // seleção só vale para o que ainda está "reembolsar"
+  for (const id of [...SEL]) if (!L.some((l) => l.id === id && l.status === 'reembolsar')) SEL.delete(id);
+  const nAnexos = (l) => [
+    l.anexos?.length ? `${l.anexos.length} anexo(s)` : '',
+    l.reembolso?.comprovantes?.length ? `${l.reembolso.comprovantes.length} comprovante(s)` : '',
+  ].filter(Boolean).join(' · ');
   tb.innerHTML = [...L].reverse().map((l) => `
     <tr>
+      <td class="sel">${l.status === 'reembolsar'
+        ? `<input type="checkbox" data-sel="${esc(l.id)}"${SEL.has(l.id) ? ' checked' : ''}>` : ''}</td>
       <td class="id">${esc(l.id)}</td>
       <td style="white-space:nowrap">${dataBR(l.data)}</td>
       <td class="desc">${esc(l.descricao)}
-        <small>${esc(l.categoria)}${l.fornecedor ? ' · ' + esc(l.fornecedor) : ''}${l.anexos?.length ? ` <span class="clipe">· ${l.anexos.length} anexo(s)</span>` : ''}</small>
+        <small>${esc(l.categoria)}${l.fornecedor ? ' · ' + esc(l.fornecedor) : ''}${nAnexos(l) ? ` <span class="clipe">· ${nAnexos(l)}</span>` : ''}</small>
       </td>
-      <td>${esc(l.pagador)}</td>
+      <td class="pag">${esc(l.pagador)}${l.status === 'reembolsado' && l.reembolso
+        ? `<small>reembolsado por ${esc(l.reembolso.por)} em ${dataBR(l.reembolso.data)}</small>` : ''}</td>
       <td><span class="pill ${esc((l.status || '').replace(' ', ''))}">${esc(l.status)}</span></td>
       <td class="num">${brl(l.valor)}</td>
       <td>
@@ -916,6 +1052,11 @@ function montarTabela() {
       </td>
     </tr>`).join('');
 
+  $$('[data-sel]').forEach((c) => c.addEventListener('change', () => {
+    c.checked ? SEL.add(c.dataset.sel) : SEL.delete(c.dataset.sel);
+    pintarSelecao();
+  }));
+  pintarSelecao();
   $$('[data-editar]').forEach((b) => b.addEventListener('click', () => editar(b.dataset.editar)));
   $$('[data-apagar]').forEach((b) => b.addEventListener('click', async () => {
     const l = EST.lancamentos.find((x) => x.id === b.dataset.apagar);
@@ -928,6 +1069,71 @@ function montarTabela() {
     } catch (err) { aviso(err.message, 'ruim'); }
   }));
 }
+
+// ---------------------------------------------------------------- reembolso em lote
+
+function pintarSelecao() {
+  const L = EST?.lancamentos || [];
+  const marcaveis = L.filter((l) => l.status === 'reembolsar');
+  const sel = L.filter((l) => SEL.has(l.id));
+  const todos = $('#selTodos');
+  todos.disabled = !marcaveis.length;
+  todos.checked = !!marcaveis.length && sel.length === marcaveis.length;
+  todos.indeterminate = !!sel.length && sel.length < marcaveis.length;
+
+  $('#lote').classList.toggle('oculto', !sel.length);
+  if (!sel.length) { fecharLote(); return; }
+  const pagadores = [...new Set(sel.map((l) => l.pagador))].join(', ');
+  $('#loteResumo').innerHTML = `<b>${sel.length}</b> marcado(s) · <b>${brl(sel.reduce((s, l) => s + l.valor, 0))}</b> · adiantado por ${esc(pagadores)}`;
+}
+
+function fecharLote() {
+  $('#loteForm').classList.add('oculto');
+  $('#btnLoteAbrir').classList.remove('oculto');
+  $('#errosLote').innerHTML = '';
+  LOTE_COMP.forEach(soltarBlob);
+  LOTE_COMP = [];
+  pintarLote();
+}
+
+$('#selTodos').addEventListener('change', (e) => {
+  for (const l of EST.lancamentos || []) {
+    if (l.status !== 'reembolsar') continue;
+    e.target.checked ? SEL.add(l.id) : SEL.delete(l.id);
+  }
+  montarTabela();
+});
+$('#btnLoteLimpar').addEventListener('click', () => { SEL.clear(); montarTabela(); });
+$('#btnLoteCancelar').addEventListener('click', fecharLote);
+$('#btnLoteAbrir').addEventListener('click', () => {
+  $('#loteForm').classList.remove('oculto');
+  $('#btnLoteAbrir').classList.add('oculto');
+  if (!$('#loteData').value) $('#loteData').value = hoje();
+  $('#lotePor').focus();
+});
+$('#btnLoteConfirmar').addEventListener('click', async () => {
+  $('#errosLote').innerHTML = '';
+  $('#btnLoteConfirmar').disabled = true;
+  try {
+    const r = await api('/api/reembolso', {
+      ids: [...SEL], por: $('#lotePor').value.trim(), data: $('#loteData').value, comprovantes: LOTE_COMP,
+    });
+    if (!r.ok) {
+      $('#errosLote').innerHTML = `<div class="erros"><ul>${r.erros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+      return;
+    }
+    SEL.clear();
+    LOTE_COMP = [];   // já gravados: não soltar como rascunho
+    $('#lotePor').value = '';
+    $('#loteData').value = '';
+    await carregar();
+    aviso(`${r.qtd} lançamento(s) marcado(s) como reembolsado(s). Clique em Publicar quando quiser subir.`, 'bom');
+  } catch (err) {
+    aviso(err.message, 'ruim');
+  } finally {
+    $('#btnLoteConfirmar').disabled = false;
+  }
+});
 
 // ---------------------------------------------------------------- sócios
 

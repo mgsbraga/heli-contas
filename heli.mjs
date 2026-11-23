@@ -12,7 +12,7 @@ import { novoSalt, derivarChave, decifrar, paraObjeto, b64 } from './lib/crypto.
 import {
   P, RAIZ, LEDGER_VAZIO, lerLedger, gravarLedger, lerSegredos, gravarSegredos,
   brl, parseValor, parseData, parsePct, hojeISO, proximoId,
-  pergunta, senhaOculta, escolher, limparCaminho,
+  pergunta, senhaOculta, escolher, limparCaminho, anexosDe,
 } from './lib/io.mjs';
 import { build, mimeDe } from './lib/build.mjs';
 import { montarRateio } from './lib/rateio.mjs';
@@ -109,18 +109,37 @@ async function cmdAdd() {
   const forma = await escolher('Forma de pagamento', ledger.formas, { permitirNovo: true });
   if (forma.novo) ledger.formas.push(forma.valor);
 
-  const status = (await escolher('Status', ['pago', 'a pagar', 'reembolsar'], { padrao: 'pago' })).valor;
+  const status = (await escolher('Status', ['pago', 'a pagar', 'reembolsar', 'reembolsado'], { padrao: 'pago' })).valor;
+  let reembolsoDados = null;
+  if (status === 'reembolsado') {
+    let por = '';
+    while (!por || por === pag.valor) {
+      por = (await escolher('Quem reembolsou', ledger.pagadores, { permitirNovo: true })).valor;
+      if (por === pag.valor) console.log('  ↳ quem reembolsou não pode ser o próprio pagador.');
+    }
+    if (!ledger.pagadores.includes(por)) ledger.pagadores.push(por);
+    let dataR = null;
+    while (!dataR) {
+      dataR = parseData(await pergunta('  Data do reembolso (dd/mm/aaaa)', hojeISO().split('-').reverse().join('/')));
+      if (!dataR) console.log('  ↳ data inválida.');
+    }
+    reembolsoDados = { por, data: dataR };
+  }
   const rateio = await perguntarRateio(ledger, pag.valor);
   const obs = await pergunta('\n  Observação (enter p/ pular)');
 
   const id = proximoId(ledger, data);
   const anexos = await coletarAnexos(id);
+  const reembolso = reembolsoDados
+    ? { ...reembolsoDados, comprovantes: await coletarAnexos(id, { prefixo: 'R', rotulo: 'Comprovante do reembolso' }) }
+    : null;
 
   ledger.lancamentos.push({
     id, data, descricao, categoria: cat.valor,
     fornecedor, cnpj,
     documento: { tipo: tipoDoc, numero: numDoc },
     valor, pagador: pag.valor, forma: forma.valor, status, rateio, obs, anexos,
+    ...(reembolso ? { reembolso } : {}),
     registradoEm: new Date().toISOString(),
   });
   ledger.lancamentos.sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
@@ -167,16 +186,16 @@ async function perguntarRateio(ledger, pagador) {
   }
 }
 
-async function coletarAnexos(id) {
+async function coletarAnexos(id, { prefixo = '', rotulo = 'Anexo' } = {}) {
   const anexos = [];
   fs.mkdirSync(P.nfOrig, { recursive: true });
   while (true) {
-    const bruto = await pergunta('\n  Anexo ' + (anexos.length + 1) + ' — caminho do PDF/foto (enter p/ encerrar)');
+    const bruto = await pergunta('\n  ' + rotulo + ' ' + (anexos.length + 1) + ' — caminho do PDF/foto (enter p/ encerrar)');
     if (!bruto) break;
     const origem = limparCaminho(bruto);
     if (!fs.existsSync(origem)) { console.log('  ↳ arquivo não encontrado.'); continue; }
     const base = path.basename(origem).replace(/[^\w.\-]+/g, '_');
-    const arquivo = id + '-' + (anexos.length + 1) + '-' + base;
+    const arquivo = id + '-' + prefixo + (anexos.length + 1) + '-' + base;
     fs.copyFileSync(origem, path.join(P.nfOrig, arquivo));
     anexos.push({
       arquivo,
@@ -271,8 +290,12 @@ function cmdList() {
   for (const l of ledger.lancamentos) {
     total += l.valor;
     const dt = l.data.split('-').reverse().join('/');
-    const clipe = l.anexos && l.anexos.length ? '  [' + l.anexos.length + ' anexo(s)]' : '';
-    const st = l.status === 'pago' ? '' : '  «' + l.status + '»';
+    const nAnexos = anexosDe(l).length;
+    const clipe = nAnexos ? '  [' + nAnexos + ' anexo(s)]' : '';
+    const st = l.status === 'pago' ? ''
+      : l.status === 'reembolsado' && l.reembolso
+        ? '  «reembolsado por ' + l.reembolso.por + ' em ' + l.reembolso.data.split('-').reverse().join('/') + '»'
+        : '  «' + l.status + '»';
     console.log('  ' + l.id + '  ' + dt + '  ' + brl(l.valor).padStart(16) + '  ' + l.descricao);
     console.log('  ' + ' '.repeat(9) + '  ' + l.categoria + ' · ' + (l.fornecedor || 's/ fornecedor') + ' · pago por ' + l.pagador + clipe + st);
   }
@@ -286,11 +309,13 @@ async function cmdRm(id) {
   const l = ledger.lancamentos[i];
   console.log('\n  ' + l.id + ' · ' + l.data + ' · ' + l.descricao + ' · ' + brl(l.valor));
   if ((await pergunta('  Remover? (s/N)')).toLowerCase() !== 's') { console.log('  Cancelado.\n'); return; }
-  for (const a of l.anexos || []) {
+  ledger.lancamentos.splice(i, 1);
+  const usados = new Set(ledger.lancamentos.flatMap((x) => anexosDe(x).map((a) => a.arquivo)));
+  for (const a of anexosDe(l)) {
+    if (usados.has(a.arquivo)) continue;
     const f = path.join(P.nfOrig, a.arquivo);
     if (fs.existsSync(f)) fs.unlinkSync(f);
   }
-  ledger.lancamentos.splice(i, 1);
   gravarLedger(ledger);
   console.log('  ✓ removido.');
   await build();
@@ -331,7 +356,7 @@ async function cmdRestore() {
   }
   fs.mkdirSync(P.nfOrig, { recursive: true });
   for (const l of ledger.lancamentos) {
-    for (const a of l.anexos || []) {
+    for (const a of anexosDe(l)) {
       const src = path.join(P.nfEnc, a.arquivo + '.enc');
       if (!fs.existsSync(src)) continue;
       const bytes = await decifrar(chave, JSON.parse(fs.readFileSync(src, 'utf8')));

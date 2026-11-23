@@ -321,6 +321,14 @@ O mesmo quadro aparece no site, nos dois níveis de acesso.
 acerto — ninguém desembolsou nada ainda. Eles aparecem à parte, como compromisso
 futuro. `pago` e `reembolsar` entram.
 
+**Reembolso tira o credor da conta.** Quando quem adiantou (`reembolsar`) recebe o
+dinheiro de volta, marque o lançamento como `reembolsado`, informando quem reembolsou,
+a data e os comprovantes (PIX, TED, recibo). Quem adiantou continua registrado em
+"Quem pagou", mas no acerto o desembolso passa a contar para quem reembolsou. No
+painel, marque as caixinhas dos lançamentos `reembolsar` na lista e use **Marcar como
+reembolsados** para fazer vários de uma vez com os mesmos comprovantes. Os
+comprovantes são cifrados como as notas e só abrem com a senha TOTAL.
+
 **Quem pagou sem ser sócio vira credor puro.** Se um investidor ou terceiro adiantou
 dinheiro, ele entra na conta com quota zero: tem a receber o valor inteiro. Aparece
 marcado como "não sócio".
