@@ -39,7 +39,30 @@ export async function derivarChave(senha, salt) {
   );
 }
 
-// Envelope = { iv, ct } em base64. O salt vive no meta.json, um por escopo.
+/** 32 bytes derivados da senha: a chave do usuário que destranca as chaves dos dados. */
+export async function derivarBits(senha, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: KDF_ITER, hash: 'SHA-256' }, base, 256);
+  return new Uint8Array(bits);
+}
+
+/** Chave AES-256-GCM a partir de 32 bytes crus. */
+export function importarChave(bytes) {
+  return crypto.subtle.importKey('raw', bytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+export const chaveAleatoria = () => crypto.getRandomValues(new Uint8Array(32));
+
+/**
+ * Identificador público de um login. O meta.json é público: ali o login aparece
+ * só como hash, para a lista de usuários não revelar quem tem acesso.
+ */
+export async function idDoLogin(login) {
+  const h = await crypto.subtle.digest('SHA-256', enc.encode('heli-usuario:' + String(login).trim().toLowerCase()));
+  return [...new Uint8Array(h)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Envelope = { iv, ct } em base64.
 export async function cifrar(chave, bytes) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chave, bytes);

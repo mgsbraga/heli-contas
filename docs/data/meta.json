@@ -1,10 +1,26 @@
 {
-  "v": 1,
+  "v": 2,
   "kdf": "PBKDF2-SHA256",
   "iter": 600000,
   "alg": "AES-256-GCM",
   "org": "Heli Eagle",
-  "geradoEm": "2026-11-23T20:47:21.891Z",
-  "saltTotal": "CC2Da5C5AdeYJGl9tAJijg==",
-  "saltResumo": "MEJ9WLAsLl8HwK3HVl/1hw=="
+  "geradoEm": "2026-11-24T01:35:35.022Z",
+  "idChave": "9HUDguA05iGY",
+  "usuarios": {
+    "b4f3de80d25f35eee48c1bfd72a9c1a7": {
+      "salt": "VNd/ghthwY1SHeVxlHRAKQ==",
+      "iv": "A8DLjAkjLOdOrzPN",
+      "ct": "GonMtR4P9pKGwhyW818ApBqPe9qwsF7tkS+881IN3XLIwt6ZP9A3Wv7xEQzPm64WDG0eCxB0jOcdslbPL57tn903kk3WSRzPHp/dytyhksEXNj6o4B+fUQ+EQRQkHpsSYGC9EglnZib+082xanlvVGbCeiFIfxCxOOuz1PndarhKdDYmhT9wVMvK6u88JchZmq9H7SVy/v/I"
+    },
+    "33253000ce8b8dbbb97bd5df5acc2466": {
+      "salt": "FhifvKjiJ8WXLr0JO8UlOA==",
+      "iv": "NTW3prZ1aR63poj4",
+      "ct": "oi1nPvgf/nsxwe/k839kdsCz4FuQI7xzIsx1ne8UVGbg9HJ9U1mzlhMQhxxdpNvszmM9vgtR9xBtH2GEEc9rXlLBLhP4CcYLmXxQ39szR/wKvmrioI0DzgdQuzqX7JQUwukINH0KwYkEBmVjfisxlS249haPtll2Zo0ucqXVhMd5adBNW0bwfvoqK5ZdK5TWph2qTqA="
+    },
+    "a33a6c2a88fc280626873143e0d4dc35": {
+      "salt": "hRbMDm19s89g19/Sfy3LFg==",
+      "iv": "Yv+bvmIAmSIe/vDB",
+      "ct": "gD4Ugg1u4UNtg6CO8iTBiiYJI5lmps4uFf3Zz6lMBHMY1VhI+jId9ox1Lvwnrx/AYprleR7poTLREl5ge0Ve9oAbQGGXZoj7kEPMTNUTA8O9lTMM0HHB+toj9YkKTjnZpBtvQRyqDtr6AqwHrm4eviT7e/L/vsm2FE7oqW6+C7yfBUUSQ6rLsVuCTRtM5Latj2QdbYI="
+    }
+  }
 }

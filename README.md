@@ -1,6 +1,6 @@
 # Prestação de contas — operação de táxi aéreo
 
-Sistema de prestação de contas hospedado no GitHub Pages, com acesso por senha.
+Sistema de prestação de contas hospedado no GitHub Pages, com login e senha por pessoa.
 Você alimenta pelo PC; sócio e contador consultam pelo navegador.
 
 ---
@@ -9,22 +9,56 @@ Você alimenta pelo PC; sócio e contador consultam pelo navegador.
 
 O repositório é público, mas **nenhum dado financeiro é legível nele**. Todo o ledger —
 valores, fornecedores, CNPJ, número da nota, quem pagou — e todas as notas fiscais
-anexadas são gravados cifrados com **AES-256-GCM**. A chave é derivada da senha por
-PBKDF2-SHA256 com 600.000 iterações, dentro do navegador de quem acessa.
+anexadas são gravados cifrados com **AES-256-GCM**, com chaves sorteadas que só existem
+no seu PC.
 
-A senha nunca é enviada a servidor algum. Não existe backend: o GitHub serve só
+Cada pessoa entra com **o próprio login e a própria senha**. O site guarda, para cada
+usuário, um envelope com as chaves dos dados trancado pela senha dele (PBKDF2-SHA256,
+600.000 iterações). Login e senha destrancam o envelope dentro do navegador de quem
+acessa e nunca são enviados a servidor algum. Não existe backend: o GitHub serve só
 arquivos estáticos e bytes cifrados.
 
 ### Dois níveis de acesso
 
-| Senha | O que abre |
+| Nível | O que abre |
 |---|---|
-| **TOTAL** | Tudo: cada lançamento, fornecedor, CNPJ, nº da nota, quem pagou, forma de pagamento e os PDFs das notas fiscais. |
-| **RESUMO** | Só os totais consolidados — por categoria, por mês, por pagador, mais o acerto entre sócios. Sem fornecedor, sem nota, sem descrição individual, sem anexos. |
+| **total** | Tudo: cada lançamento, fornecedor, CNPJ, nº da nota, quem pagou, forma de pagamento, os PDFs das notas fiscais e os comprovantes de reembolso. |
+| **resumo** | Só os totais consolidados — por categoria, por mês, por pagador, mais o acerto entre sócios. Sem fornecedor, sem nota, sem descrição individual, sem anexos. |
 
-Os dois níveis usam **chaves e arquivos separados**. A senha de resumo é
-matematicamente incapaz de abrir o ledger completo ou qualquer nota fiscal — não é
-uma restrição de interface, é criptografia.
+Os dois níveis usam **chaves e arquivos separados**. O envelope de um usuário
+"resumo" só contém a chave do resumo: ele é matematicamente incapaz de abrir o ledger
+completo ou qualquer nota fiscal — não é uma restrição de interface, é criptografia.
+
+### Usuários
+
+```powershell
+node heli.mjs usuario listar
+node heli.mjs usuario criar julio "Julio Capute"          # acesso total (padrão)
+node heli.mjs usuario criar contador "Contador" resumo    # só o resumo
+node heli.mjs usuario senha julio                         # troca a senha
+node heli.mjs usuario remover julio                       # tira o acesso
+```
+
+- **A senha é gerada automaticamente**: 24 letras e números, sem os que se confundem
+  (0/O, 1/l/I), por exemplo `k7Rm4XpQ2wZt9HbNc3Fs8YdK`. Ela é mostrada **uma única vez** e
+  não fica guardada em lugar nenhum: repasse por um canal privado. Se o comando for
+  rodado sem terminal (pelo `!` do Claude, por exemplo), a senha vai para
+  `local/senhas-para-entregar.txt`, que abre no Bloco de Notas — apague depois.
+  Com `--digitar` no fim do comando, você digita a senha (só num PowerShell seu).
+- **Só você troca senhas**, pelo terminal. Quem esqueceu recebe uma nova com
+  `usuario senha`; a antiga para de funcionar quando você publicar.
+- **Remover alguém troca as chaves dos dados** e recifra tudo, notas inclusive: o
+  envelope antigo daquela pessoa não abre mais nada que for publicado depois.
+- No `meta.json` público o login aparece só como hash; nome e nível ficam dentro do
+  envelope cifrado. A lista de usuários não revela quem tem acesso.
+- O site não sabe quem acessou nem quando: não há servidor para registrar isso.
+- Nada muda no site antes de publicar (botão **Publicar** do painel ou
+  `node heli.mjs publish`).
+
+**Migração das senhas compartilhadas.** Até 23/11/2026 o site abria com duas senhas
+compartilhadas (TOTAL e RESUMO). O primeiro `usuario criar` desliga as duas e sorteia
+as chaves novas; até lá, tudo segue funcionando como antes. Crie todos os usuários
+antes de publicar: depois de publicar, só entra quem tiver login.
 
 ### O que fica no repositório
 
@@ -33,10 +67,10 @@ docs/
   index.html          visualizador (código, sem dado nenhum)
   crypto.mjs          rotinas de cifra
   data/
-    meta.json         só: nome da operação, data do build, os dois salts
-    ledger.enc        ledger completo      → abre com a senha TOTAL
-    resumo.enc        totais consolidados  → abre com a senha RESUMO
-    nf/*.enc          notas fiscais        → abrem com a senha TOTAL
+    meta.json         nome da operação, data do build e um envelope cifrado por usuário
+    ledger.enc        ledger completo      → abre com login de nível total
+    resumo.enc        totais consolidados  → abre com qualquer login
+    nf/*.enc          notas e comprovantes → abrem com login de nível total
 ```
 
 ### O que nunca entra no repositório
@@ -46,7 +80,7 @@ A pasta `local/` está no `.gitignore` e é a única cópia em claro:
 ```
 local/
   ledger.json         o ledger legível — sua fonte de verdade
-  segredos.json       as duas senhas
+  segredos.json       as chaves dos dados e, por usuário, a chave derivada da senha (não a senha)
   nf/                 as notas fiscais originais
 ```
 
@@ -327,7 +361,7 @@ a data e os comprovantes (PIX, TED, recibo). Quem adiantou continua registrado e
 "Quem pagou", mas no acerto o desembolso passa a contar para quem reembolsou. No
 painel, marque as caixinhas dos lançamentos `reembolsar` na lista e use **Marcar como
 reembolsados** para fazer vários de uma vez com os mesmos comprovantes. Os
-comprovantes são cifrados como as notas e só abrem com a senha TOTAL.
+comprovantes são cifrados como as notas e só abrem com login de nível total.
 
 **Quem pagou sem ser sócio vira credor puro.** Se um investidor ou terceiro adiantou
 dinheiro, ele entra na conta com quota zero: tem a receber o valor inteiro. Aparece
@@ -353,7 +387,7 @@ antigos antes de trocar o padrão.
 | `node heli.mjs painel` | Abre o painel no navegador. O jeito fácil. |
 | `node heli.mjs envio` | Gera o formulário público de envio de notas. |
 | `node heli.mjs envio-config` | Registra o endereço do recebedor e imprime o link. |
-| `node heli.mjs init` | Configuração inicial: define as duas senhas e cria o ledger. Roda uma vez só. |
+| `node heli.mjs init` | Configuração inicial: cria o seu usuário e o ledger. Roda uma vez só. |
 | `node heli.mjs socios` | Define os sócios e suas quotas de rateio. |
 | `node heli.mjs add` | Registra um lançamento (interativo). |
 | `node heli.mjs list` | Lista os lançamentos no terminal. |
@@ -361,8 +395,8 @@ antigos antes de trocar o padrão.
 | `node heli.mjs rm 2026-0004` | Remove um lançamento e seus anexos. |
 | `node heli.mjs build` | Recifra `docs/data/` sem publicar. |
 | `node heli.mjs publish` | Build + commit + push. |
-| `node heli.mjs senha` | Troca a senha TOTAL ou a RESUMO. |
-| `node heli.mjs restore` | Reconstrói `local/` a partir do que está publicado. |
+| `node heli.mjs usuario` | Acessos ao site: `listar`, `criar`, `senha`, `remover`. |
+| `node heli.mjs restore` | Reconstrói `local/` a partir do que está publicado (pede um login de nível total). |
 
 ### Corrigir um lançamento já feito
 
@@ -373,22 +407,24 @@ legível e pode ser editado à mão — depois rode `node heli.mjs publish`.
 
 ## O que você precisa saber sobre a segurança
 
-**A senha é a única defesa.** Como o repositório é público, qualquer pessoa pode
+**As senhas são a única defesa.** Como o repositório é público, qualquer pessoa pode
 baixar os arquivos cifrados e tentar quebrá-los offline, sem limite de tentativas.
-As 600.000 iterações de PBKDF2 tornam isso caro, mas não impossível contra uma senha
-fraca. Use frases longas — quatro ou cinco palavras sem sentido juntas valem mais
-que oito caracteres com símbolos.
+As senhas geradas têm cerca de 140 bits e cada tentativa custa 600.000 iterações de
+PBKDF2: força bruta fica fora de alcance. Se usar `--digitar`, escolha uma senha
+longa e que não seja usada em outro lugar.
 
-**Não há recuperação.** Perdeu a senha TOTAL, perdeu os dados. Guarde as duas em um
-gerenciador de senhas.
+**Recuperação.** Quem esqueceu a senha recebe uma nova de você (`usuario senha`).
+Se o PC for perdido, `node heli.mjs restore` reconstrói tudo com qualquer login de
+nível total. Sem `local/` e sem nenhum login total, os dados são irrecuperáveis.
 
-**O que vaza mesmo sem a senha:** o nome da operação (em `meta.json`), a data de cada
-publicação, quantos lançamentos têm nota anexada e o tamanho aproximado de cada
-arquivo. Nenhum valor, nome ou documento.
+**O que vaza mesmo sem senha:** o nome da operação (em `meta.json`), a data de cada
+publicação, quantos usuários existem, quantos lançamentos têm nota anexada e o
+tamanho aproximado de cada arquivo. Nenhum valor, nome ou documento.
 
-**Trocar a senha não apaga o passado.** O histórico do git guarda as versões antigas,
-cifradas com a senha antiga. Se uma senha vazar, quem a tiver pode ler os commits
-anteriores àquela troca. Para apagar de vez seria preciso reescrever o histórico.
+**Remover alguém não apaga o passado.** O histórico do git guarda as versões antigas,
+cifradas com as chaves antigas, que o envelope daquela pessoa abria. Ela deixa de ver
+o que for publicado depois, mas o que já existia ela já podia ter visto. Para apagar
+de vez seria preciso reescrever o histórico.
 
 **Backup:** `local/` está no OneDrive, e o que está publicado pode ser reconstruído
 com `node heli.mjs restore`. Duas cópias independentes.

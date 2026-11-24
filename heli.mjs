@@ -7,8 +7,11 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { novoSalt, derivarChave, decifrar, paraObjeto, b64 } from './lib/crypto.mjs';
+import { execFileSync, spawn } from 'node:child_process';
+import { derivarBits, importarChave, decifrar, paraObjeto, b64, idDoLogin } from './lib/crypto.mjs';
+import {
+  garantirChaves, criarUsuario, validarNovoUsuario, trocarSenha, removerUsuario, listarUsuarios, normalizarLogin, NIVEIS,
+} from './lib/usuarios.mjs';
 import {
   P, RAIZ, LEDGER_VAZIO, lerLedger, gravarLedger, lerSegredos, gravarSegredos,
   brl, parseValor, parseData, parsePct, hojeISO, proximoId,
@@ -27,35 +30,28 @@ const git = (...args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8'
 async function cmdInit() {
   if (fs.existsSync(P.ledger)) {
     console.log('\n  Já existe um ledger em local/ledger.json. Nada foi alterado.');
-    console.log('  Para trocar as senhas:  node heli.mjs senha\n');
+    console.log('  Para gerenciar acessos:  node heli.mjs usuario\n');
     return;
   }
   console.log('\n  ── Configuração inicial ────────────────────────────────\n');
   const org = await pergunta('  Nome da operação', LEDGER_VAZIO.org);
 
-  console.log('\n  Duas senhas, dois níveis de acesso:');
-  console.log('   · TOTAL   — vê fornecedor, nota fiscal, quem pagou, anexos');
-  console.log('   · RESUMO  — vê apenas totais por categoria, mês e pagador\n');
-  console.log('  Não há recuperação: sem a senha TOTAL os dados são irrecuperáveis.\n');
+  console.log('\n  O site abre com login e senha, um por pessoa. Comece pelo seu.');
+  console.log('  Dois níveis: total (tudo, inclusive notas) e resumo (só totais).\n');
+  let login = '';
+  while (!/^[a-z0-9][a-z0-9._-]{1,31}$/.test(login)) login = normalizarLogin(await pergunta('  Seu login (ex.: miguel)'));
+  const nome = await pergunta('  Seu nome', login);
 
-  const senhaTotal = await lerSenhaNova('  Senha TOTAL');
-  const senhaResumo = await lerSenhaNova('  Senha RESUMO');
-  if (senhaTotal === senhaResumo) {
-    console.log('\n  As duas senhas precisam ser diferentes. Recomece.\n');
-    process.exit(1);
-  }
-
-  gravarSegredos({
-    senhaTotal, senhaResumo,
-    saltFull: b64.from(novoSalt()),
-    saltResumo: b64.from(novoSalt()),
-  });
+  const senha = await lerSenhaNova('  Sua senha');
+  const seg = garantirChaves(lerSegredos() || {});
+  await criarUsuario(seg, login, nome, 'total', senha);
+  gravarSegredos(seg);
   gravarLedger({ ...LEDGER_VAZIO, org, criadoEm: new Date().toISOString() });
   fs.mkdirSync(P.nfOrig, { recursive: true });
 
   await build();
   console.log('\n  Falta publicar — enquanto isso o site não tem o que decifrar e a');
-  console.log('  tela de senha fica travada.');
+  console.log('  tela de login fica travada.');
   await talvezPublicar();
   console.log('  Se a operação tem mais de um sócio bancando as despesas, defina as quotas');
   console.log('  agora — o rateio passa a ser automático:  node heli.mjs socios');
@@ -324,34 +320,156 @@ async function cmdRm(id) {
 
 // ---------------------------------------------------------------- senha / restore
 
-async function cmdSenha() {
-  const seg = lerSegredos();
-  if (!seg) { console.log('\n  Rode primeiro:  node heli.mjs init\n'); return; }
-  const qual = (await escolher('Qual senha trocar', ['TOTAL', 'RESUMO'])).valor;
-  const nova = await lerSenhaNova('  Nova senha ' + qual);
-  if (qual === 'TOTAL') { seg.senhaTotal = nova; seg.saltFull = b64.from(novoSalt()); }
-  else { seg.senhaResumo = nova; seg.saltResumo = b64.from(novoSalt()); }
-  gravarSegredos(seg);
-  // salt novo invalida os anexos já cifrados: recifra tudo
-  if (qual === 'TOTAL' && fs.existsSync(P.nfEnc)) {
-    for (const f of fs.readdirSync(P.nfEnc)) fs.unlinkSync(path.join(P.nfEnc, f));
+function cmdSenha() {
+  console.log('\n  As senhas compartilhadas foram substituídas por usuários.');
+  console.log('  Para trocar a senha de alguém:  node heli.mjs usuario senha <login>\n');
+}
+
+// ---------------------------------------------------------------- usuários
+
+const AJUDA_USUARIO = `
+  Acessos ao site — um login e uma senha por pessoa
+
+    node heli.mjs usuario listar
+    node heli.mjs usuario criar <login> "<Nome>" [total|resumo]   (padrão: total)
+    node heli.mjs usuario senha <login>       troca a senha
+    node heli.mjs usuario remover <login>     tira o acesso e troca as chaves
+
+  A senha é gerada automaticamente (24 letras e números) e mostrada uma única vez.
+  Com  --digitar  no fim, você digita a senha no terminal (escondida, duas vezes).
+  Nada muda no site até publicar (botão Publicar do painel ou  node heli.mjs publish).
+
+`;
+
+/**
+ * Mostra as senhas recém-sorteadas. Num terminal de verdade, na tela. Quando a
+ * saída está sendo capturada (rodado por outro programa), grava num arquivo em
+ * local/ e abre no Bloco de Notas, para a senha não ficar registrada em log.
+ */
+function entregarSenha(itens) {
+  const linhas = itens.map((i) =>
+    `  ${i.nome}  ·  acesso ${i.nivel}\n    login:  ${i.login}\n    senha:  ${i.senha}`);
+  const texto = linhas.join('\n\n');
+  if (process.stdout.isTTY) {
+    console.log('\n  ── Senha(s) — anote agora, não aparecem de novo ─────────\n');
+    console.log(texto);
+    console.log('\n  Repasse por um canal privado. Ninguém mais tem cópia delas.\n');
+    return;
   }
-  await build();
-  console.log('\n  ✓ senha trocada — só vale no site depois de publicar.');
-  await talvezPublicar();
+  const arq = path.join(P.local, 'senhas-para-entregar.txt');
+  fs.appendFileSync(arq, `${new Date().toLocaleString('pt-BR')}\n\n${texto}\n\n` +
+    `Repasse por um canal privado e APAGUE este arquivo depois.\n\n`, 'utf8');
+  console.log('\n  Senha(s) gravada(s) em local/senhas-para-entregar.txt (abrindo no Bloco de Notas).');
+  console.log('  Repasse e apague o arquivo depois.\n');
+  if (!process.env.HELI_NAO_ABRIR) {
+    try { spawn('notepad', [arq], { detached: true, stdio: 'ignore' }).unref(); } catch { /* sem bloco de notas */ }
+  }
+}
+
+/** Senha gerada (padrão: devolve null) ou digitada (--digitar, exige um terminal de verdade). */
+async function obterSenha(digitar, rotulo) {
+  if (!digitar) return null;
+  if (!process.stdin.isTTY) {
+    throw new Error('Para digitar a senha, rode este comando num PowerShell seu (dentro de Heli\\contas),\n' +
+      '    não pelo "!" do Claude. Sem  --digitar  a senha é gerada automaticamente.');
+  }
+  return lerSenhaNova(rotulo);
+}
+
+async function cmdUsuario() {
+  const args = process.argv.slice(3);
+  const digitar = args.includes('--digitar');
+  const [acao, alvo, ...resto] = args.filter((a) => a !== '--digitar');
+  const seg = lerSegredos();
+  if (!seg && acao !== undefined && acao !== 'listar') {
+    console.log('\n  Rode primeiro:  node heli.mjs init\n');
+    return;
+  }
+
+  if (!acao || acao === 'ajuda') { console.log(AJUDA_USUARIO); return; }
+
+  if (acao === 'listar' || acao === 'ls') {
+    const lista = listarUsuarios(seg);
+    if (seg && !seg.chaveTotal) console.log('\n  Ainda no modelo antigo (senhas TOTAL/RESUMO compartilhadas).');
+    if (!lista.length) { console.log('\n  Nenhum usuário ainda.' + AJUDA_USUARIO); return; }
+    console.log('');
+    for (const u of lista) {
+      const quando = u.senhaDefinidaEm ? new Date(u.senhaDefinidaEm).toLocaleDateString('pt-BR') : '—';
+      console.log(`  ${u.login.padEnd(14)} ${u.nome.padEnd(22)} ${u.nivel.padEnd(7)} senha de ${quando}`);
+    }
+    const rest = Object.keys(seg.acessosRestaurados || {}).length;
+    if (rest) console.log(`\n  + ${rest} acesso(s) vindo(s) de um restore, sem nome conhecido aqui.`);
+    console.log('');
+    return;
+  }
+
+  if (acao === 'criar' || acao === 'novo') {
+    const nivel = (resto[1] || 'total').toLowerCase();
+    if (!alvo || !resto[0] || !NIVEIS.includes(nivel)) { console.log(AJUDA_USUARIO); return; }
+    validarNovoUsuario(seg, alvo, resto[0], nivel);
+    const digitada = await obterSenha(digitar, `  Senha de ${resto[0]}`);
+    const migrando = !seg.chaveTotal;
+    garantirChaves(seg);
+    const senha = await criarUsuario(seg, alvo, resto[0], nivel, digitada);
+    gravarSegredos(seg);
+    await build({ verboso: false });
+    if (digitada) console.log(`
+  ✓ usuário ${normalizarLogin(alvo)} (${resto[0]}, acesso ${nivel}) criado.`);
+    else entregarSenha([{ login: normalizarLogin(alvo), nome: resto[0], nivel, senha }]);
+    if (migrando) {
+      console.log('  As senhas compartilhadas TOTAL e RESUMO foram desligadas. Crie todos os');
+      console.log('  usuários antes de publicar: depois de publicar, só entra quem tiver login.\n');
+    }
+    console.log('  Vale no site depois de publicar.\n');
+    return;
+  }
+
+  if (acao === 'senha') {
+    if (!alvo) { console.log(AJUDA_USUARIO); return; }
+    const u = seg.usuarios?.[normalizarLogin(alvo)];
+    if (!u) throw new Error(`Usuário "${alvo}" não encontrado.`);
+    const digitada = await obterSenha(digitar, `  Nova senha de ${u.nome}`);
+    const senha = await trocarSenha(seg, alvo, digitada);
+    gravarSegredos(seg);
+    await build({ verboso: false });
+    if (digitada) console.log(`
+  ✓ senha de ${normalizarLogin(alvo)} trocada.`);
+    else entregarSenha([{ login: normalizarLogin(alvo), nome: u.nome, nivel: u.nivel, senha }]);
+    console.log('  A senha antiga para de funcionar quando você publicar.\n');
+    return;
+  }
+
+  if (acao === 'remover' || acao === 'rm') {
+    if (!alvo) { console.log(AJUDA_USUARIO); return; }
+    const restam = Object.keys(seg.usuarios || {}).filter((l) => l !== normalizarLogin(alvo));
+    if (!restam.length) { console.log('\n  Não dá para remover o último usuário: ninguém mais abriria o site.\n'); return; }
+    const perdidos = removerUsuario(seg, alvo);
+    gravarSegredos(seg);
+    await build({ verboso: false });
+    console.log(`\n  ✓ ${normalizarLogin(alvo)} removido. As chaves dos dados foram trocadas e tudo foi recifrado.`);
+    if (perdidos) console.log(`  ${perdidos} acesso(s) vindo(s) de restore foram descartados: recrie esses usuários.`);
+    console.log('  Vale no site depois de publicar.\n');
+    return;
+  }
+
+  console.log(AJUDA_USUARIO);
 }
 
 async function cmdRestore() {
   // Reconstrói local/ledger.json a partir do que está publicado — resgate se o PC for perdido.
   const meta = JSON.parse(fs.readFileSync(path.join(P.dados, 'meta.json'), 'utf8'));
-  const senha = await senhaOculta('  Senha TOTAL');
-  const chave = await derivarChave(senha, b64.to(meta.saltTotal));
-  let ledger;
+  const login = normalizarLogin(await pergunta('  Login (acesso total)'));
+  const senha = await senhaOculta('  Senha');
+  const env = meta.usuarios?.[await idDoLogin(login)];
+  let ledger, chave, conteudo, kek;
   try {
-    const env = JSON.parse(fs.readFileSync(path.join(P.dados, 'ledger.enc'), 'utf8'));
-    ledger = paraObjeto(await decifrar(chave, env));
+    kek = await derivarBits(senha, b64.to(env.salt));
+    conteudo = paraObjeto(await decifrar(await importarChave(kek), env));
+    if (!conteudo.kt) throw new Error('sem acesso total');
+    chave = await importarChave(b64.to(conteudo.kt));
+    ledger = paraObjeto(await decifrar(chave, JSON.parse(fs.readFileSync(path.join(P.dados, 'ledger.enc'), 'utf8'))));
   } catch {
-    console.log('\n  Senha incorreta.\n');
+    console.log('\n  Login ou senha incorretos (o restore exige um usuário com acesso total).\n');
     process.exit(1);
   }
   fs.mkdirSync(P.nfOrig, { recursive: true });
@@ -366,8 +484,22 @@ async function cmdRestore() {
   delete ledger.escopo;
   delete ledger.geradoEm;
   gravarLedger(ledger);
-  console.log('\n  ✓ restaurados ' + ledger.lancamentos.length + ' lançamentos e seus anexos em local/.');
-  console.log('  Falta só recriar local/segredos.json — rode:  node heli.mjs senha\n');
+
+  // Chaves de volta. O seu usuário é recriado com a sua senha; os dos outros
+  // seguem valendo pelos envelopes publicados, até a próxima troca de chaves.
+  const seg = lerSegredos() || {};
+  seg.chaveTotal = conteudo.kt;
+  seg.chaveResumo = conteudo.kr;
+  seg.idChave = meta.idChave;
+  seg.usuarios = {
+    [login]: { nome: conteudo.nome, nivel: 'total', salt: env.salt, kek: b64.from(kek), senhaDefinidaEm: new Date().toISOString() },
+  };
+  const meuId = await idDoLogin(login);
+  seg.acessosRestaurados = Object.fromEntries(Object.entries(meta.usuarios).filter(([id]) => id !== meuId));
+  gravarSegredos(seg);
+  console.log('\n  ✓ restaurados ' + ledger.lancamentos.length + ' lançamentos, seus anexos e as chaves em local/.');
+  console.log('  Os outros usuários continuam entrando com as senhas de sempre. Para tê-los');
+  console.log('  com nome aqui, recrie-os (node heli.mjs usuario criar ...) e repasse as senhas novas.\n');
 }
 
 // ---------------------------------------------------------------- publish
@@ -486,7 +618,7 @@ const AJUDA = `
 
     node heli.mjs painel     abre o painel no navegador  ← o jeito fácil
     node heli.mjs envio      gera o formulário público de envio de notas
-    node heli.mjs init       configuração inicial (senhas + ledger)
+    node heli.mjs init       configuração inicial (seu usuário + ledger)
     node heli.mjs socios     define os sócios e suas quotas
     node heli.mjs add        registra um lançamento pelo terminal
     node heli.mjs list       lista os lançamentos no terminal
@@ -494,7 +626,7 @@ const AJUDA = `
     node heli.mjs rm <id>    remove um lançamento
     node heli.mjs build      recifra docs/data/ sem publicar
     node heli.mjs publish    build + commit + push
-    node heli.mjs senha      troca a senha TOTAL ou RESUMO
+    node heli.mjs usuario    acessos ao site: listar, criar, senha, remover
     node heli.mjs restore    reconstrói o ledger local a partir do publicado
 `;
 
@@ -505,6 +637,7 @@ const rotas = {
   add: cmdAdd, novo: cmdAdd, list: cmdList, ls: cmdList,
   socios: cmdSocios, acerto: () => mostrarAcerto(lerLedger()),
   rm: () => cmdRm(process.argv[3]), build, publish: cmdPublish, senha: cmdSenha, restore: cmdRestore,
+  usuario: cmdUsuario, usuarios: cmdUsuario,
 };
 
 try {

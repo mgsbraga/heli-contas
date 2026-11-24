@@ -327,15 +327,21 @@
       <path d="M34 27h6l-3 4h-3M16 31v5M13 36h8"/>
     </svg>
     <h1 id="gateOrg">Prestação de Contas</h1>
-    <p class="sub">Acesso restrito — informe a senha</p>
-    <form class="field" id="gateForm" autocomplete="off">
-      <input type="password" id="senha" placeholder="Senha" autocomplete="current-password" autofocus>
-      <button class="btn" type="submit" id="gateBtn">Abrir</button>
+    <p class="sub">Acesso restrito — entre com seu usuário</p>
+    <form id="gateForm">
+      <div class="field" style="margin-bottom:10px">
+        <input type="text" id="usuario" placeholder="Usuário" autocomplete="username"
+               autocapitalize="none" spellcheck="false" autofocus>
+      </div>
+      <div class="field">
+        <input type="password" id="senha" placeholder="Senha" autocomplete="current-password">
+        <button class="btn" type="submit" id="gateBtn">Entrar</button>
+      </div>
     </form>
     <div id="gateMsg"></div>
     <p class="lock-note">
       Os dados deste site estão cifrados com AES-256-GCM.<br>
-      A senha não é enviada a servidor algum — a decifragem acontece no seu navegador.
+      Usuário e senha não são enviados a servidor algum — a decifragem acontece no seu navegador.
     </p>
   </div>
 </div>
@@ -422,7 +428,7 @@
 </div>
 
 <script type="module">
-import { derivarChave, decifrar, paraObjeto, b64 } from './crypto.mjs';
+import { derivarChave, derivarBits, importarChave, decifrar, paraObjeto, b64, idDoLogin } from './crypto.mjs';
 
 const $ = (s) => document.querySelector(s);
 const brl = (n) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -444,12 +450,20 @@ let META = null;
 let CHAVE = null;     // chave total, quando o escopo é total
 let DADOS = null;
 let ESCOPO = null;    // 'total' | 'resumo'
+let NOME = '';        // quem entrou
 
 // ---------------------------------------------------------------- portão
 
 (async function carregarMeta() {
   try {
     META = await (await fetch('data/meta.json', { cache: 'no-store' })).json();
+    if (META.saltTotal) {
+      // publicação no modelo antigo: só senha, sem usuário
+      $('#usuario').closest('.field').style.display = 'none';
+      $('#usuario').disabled = true;
+      $('.gate-card p.sub').textContent = 'Acesso restrito — informe a senha';
+      $('#senha').focus();
+    }
     if (META.org) {
       $('#gateOrg').textContent = META.org;
       document.title = META.org + ' — Prestação de Contas';
@@ -458,25 +472,27 @@ let ESCOPO = null;    // 'total' | 'resumo'
     $('#gateMsg').className = 'info';
     $('#gateMsg').textContent = 'Ainda não há dados publicados aqui.';
     $('#senha').disabled = true;
+    $('#usuario').disabled = true;
     $('#gateBtn').disabled = true;
   }
 })();
 
 $('#gateForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const usuario = $('#usuario').value;
   const senha = $('#senha').value;
-  if (!senha || !META) return;
+  if ((!usuario.trim() && !META?.saltTotal) || !senha || !META) return;
 
   $('#gateBtn').disabled = true;
   $('#gateMsg').className = 'info';
   $('#gateMsg').textContent = 'Decifrando…';
   await new Promise((r) => setTimeout(r, 30));
 
-  const tentativa = await abrir(senha);
+  const tentativa = await abrir(usuario, senha);
   if (!tentativa) {
     $('#gateBtn').disabled = false;
     $('#gateMsg').className = '';
-    $('#gateMsg').textContent = 'Senha incorreta.';
+    $('#gateMsg').textContent = 'Usuário ou senha incorretos.';
     $('#senha').select();
     return;
   }
@@ -486,21 +502,44 @@ $('#gateForm').addEventListener('submit', async (e) => {
   render();
 });
 
-async function abrir(senha) {
-  // tenta o escopo total; se falhar, tenta o resumo. Chaves e blobs são independentes.
+async function abrir(usuario, senha) {
+  if (META.saltTotal) return abrirLegado(senha);
+  // O envelope do usuário guarda as chaves dos dados, trancadas pela chave
+  // derivada da senha dele. Total leva as duas chaves; resumo, só a do resumo.
+  const env = (META.usuarios || {})[await idDoLogin(usuario)];
+  try {
+    // usuário inexistente também paga o custo do PBKDF2: a resposta não revela quem existe
+    const kek = await derivarBits(senha, env ? b64.to(env.salt) : new Uint8Array(16));
+    if (!env) return false;
+    const acesso = paraObjeto(await decifrar(await importarChave(kek), env));
+    NOME = acesso.nome || '';
+    if (acesso.kt) {
+      const k = await importarChave(b64.to(acesso.kt));
+      DADOS = paraObjeto(await decifrar(k, await (await fetch('data/ledger.enc', { cache: 'no-store' })).json()));
+      CHAVE = k;
+      ESCOPO = 'total';
+    } else {
+      const k = await importarChave(b64.to(acesso.kr));
+      DADOS = paraObjeto(await decifrar(k, await (await fetch('data/resumo.enc', { cache: 'no-store' })).json()));
+      ESCOPO = 'resumo';
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function abrirLegado(senha) {
   try {
     const k = await derivarChave(senha, b64.to(META.saltTotal));
-    const env = await (await fetch('data/ledger.enc', { cache: 'no-store' })).json();
-    DADOS = paraObjeto(await decifrar(k, env));
+    DADOS = paraObjeto(await decifrar(k, await (await fetch('data/ledger.enc', { cache: 'no-store' })).json()));
     CHAVE = k;
     ESCOPO = 'total';
     return true;
   } catch { /* segue para o resumo */ }
-
   try {
     const k = await derivarChave(senha, b64.to(META.saltResumo));
-    const env = await (await fetch('data/resumo.enc', { cache: 'no-store' })).json();
-    DADOS = paraObjeto(await decifrar(k, env));
+    DADOS = paraObjeto(await decifrar(k, await (await fetch('data/resumo.enc', { cache: 'no-store' })).json()));
     ESCOPO = 'resumo';
     return true;
   } catch {
@@ -514,7 +553,7 @@ $('#btnSair').addEventListener('click', () => location.reload());
 
 function render() {
   $('#appOrg').textContent = DADOS.org || META.org || 'Prestação de contas';
-  $('#appScope').textContent = ESCOPO === 'total' ? 'acesso total' : 'resumo';
+  $('#appScope').textContent = (NOME ? NOME + ' · ' : '') + (ESCOPO === 'total' ? 'acesso total' : 'resumo');
   $('#appScope').className = 'scope' + (ESCOPO === 'total' ? ' total' : '');
   const dt = new Date(DADOS.geradoEm || META.geradoEm);
   $('#appStamp').textContent = 'atualizado em ' + dt.toLocaleDateString('pt-BR') + ' ' +
