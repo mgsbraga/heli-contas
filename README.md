@@ -22,7 +22,7 @@ arquivos estáticos e bytes cifrados.
 
 | Nível | O que abre |
 |---|---|
-| **total** | Tudo: cada lançamento, fornecedor, CNPJ, nº da nota, quem pagou, forma de pagamento, os PDFs das notas fiscais e os comprovantes de reembolso. |
+| **total** | Tudo: cada lançamento, fornecedor, CNPJ, nº da nota, quem pagou, forma de pagamento, os PDFs das notas fiscais e os comprovantes de reembolso. Mais as abas **Planejamento** e **Decisões**. |
 | **resumo** | Só os totais consolidados — por categoria, por mês, por pagador, mais o acerto entre sócios. Sem fornecedor, sem nota, sem descrição individual, sem anexos. |
 
 Os dois níveis usam **chaves e arquivos separados**. O envelope de um usuário
@@ -66,6 +66,7 @@ antes de publicar: depois de publicar, só entra quem tiver login.
 docs/
   index.html          visualizador (código, sem dado nenhum)
   crypto.mjs          rotinas de cifra
+  historia/           abas Planejamento e Decisões (código e mapa, sem dado nenhum)
   data/
     meta.json         nome da operação, data do build e um envelope cifrado por usuário
     ledger.enc        ledger completo      → abre com login de nível total
@@ -314,6 +315,26 @@ você ter de conferir tudo, o que anularia o ganho. Preferimos não oferecer.
 
 **Não consulta nada online.** O decodificador de QR está versionado em
 `painel/vendor/` e roda offline. Nenhum dado seu sai da máquina.
+
+---
+
+## Planejamento e Decisões — a vinda da aeronave
+
+Quem entra com login **total** vê, além de **Contas**, duas abas no cabeçalho:
+
+- **Planejamento** — "Do Tennessee a Jacarepaguá": o mapa da rota do traslado e, capítulo por
+  capítulo, o que já está feito, o que está em andamento e o que falta. Cada giro da roda do mouse
+  avança um capítulo; no celular a rolagem é livre.
+- **Decisões** — as decisões em aberto (com prazo e opções) e as pendências, na ordem em que vencem.
+
+O conteúdo fica no próprio ledger, no campo `historia` (rota, capítulos, decisões e passos). Sai
+cifrado dentro do `ledger.enc`, nunca no `resumo.enc`: um login de resumo não vê as abas nem
+consegue abrir esse conteúdo. O código das abas mora em `docs/historia/` e roda num quadro (iframe)
+por cima do site, recebendo os dados já decifrados pela página principal; nada passa pelo endereço.
+O endereço guarda só a aba (`#planejamento`, `#decisoes`), e o voltar do navegador funciona.
+
+Por enquanto o conteúdo é atualizado direto no ledger (`historia`), sem tela no painel. O build
+carimba a versão de cada arquivo de `docs/historia/` para o navegador não misturar versões.
 
 ---
 

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Planejamento</title>
+<link rel="stylesheet" href="base.css?v=c804c9296b">
+<link rel="stylesheet" href="rota.css?v=3a9d591da6">
+<style>
+  /* Abas Planejamento e Decisões do site de contas. Esta página não tem dados próprios: roda dentro
+     do site (iframe) e recebe a história já decifrada da página principal, por iniciar(). */
+
+  /* cabeçalho igual ao do site */
+  header.top { position: relative; z-index: 30; background: #0a0e13; border-bottom: 1px solid #18222d; font: 400 14px/1.55 var(--sans); }
+  .top-inner { max-width: 1180px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .top .mark { width: 26px; height: 26px; color: #f2a950; flex-shrink: 0; }
+  .top .org { font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; color: #e4ecf4; }
+  .top .scope { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; padding: 3px 8px; border-radius: 20px; border: 1px solid #7a5827; color: #f2a950; }
+  .top .abas { display: flex; gap: 2px; margin-left: 6px; }
+  .top .abas a { color: #94a5b8; text-decoration: none; font-size: 13.5px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  .top .abas a:hover { color: #e4ecf4; }
+  .top .abas a.on { color: #e4ecf4; background: #161f29; }
+  .top .spacer { flex: 1; }
+  .top .stamp { font-size: 11.5px; color: #5f7186; }
+  .top .sair { font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; background: transparent; color: #94a5b8; border: 1px solid #1f2b38; border-radius: 8px; padding: 10px 18px; }
+  .top .sair:hover { color: #e4ecf4; border-color: #5f7186; }
+  @media (max-width: 700px) {
+    .top-inner { padding: 12px 16px; gap: 10px; }
+    .top .stamp { display: none; }
+    .top .abas { order: 9; width: 100%; margin: 0; }
+    .top .sair { padding: 7px 12px; }
+  }
+  .falha { max-width: 560px; margin: 80px auto; padding: 0 20px; color: var(--txt-2); }
+
+  /* contador fixo no palco */
+  .placar { position: absolute; right: 20px; top: 18px; width: 260px; background: rgba(9, 13, 18, .88); backdrop-filter: blur(8px); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px; pointer-events: auto; }
+  .placar .n { font-size: 34px; font-weight: 800; letter-spacing: -.04em; line-height: 1; color: var(--ouro-claro); }
+  .placar .n small { font-size: 12px; font-weight: 500; color: var(--txt-2); letter-spacing: 0; margin-left: 6px; }
+  .placar .l { font-size: 12px; color: var(--txt-2); margin-top: 6px; }
+  .placar .l b { color: var(--warn); }
+  .placar .prox { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--txt-3); cursor: pointer; }
+  .placar .prox b { display: block; color: var(--txt); font-weight: 600; font-size: 12.5px; }
+  .hud { right: 300px; }
+
+  /* bandeiras no mapa */
+  .grupo-band { position: absolute; left: 0; top: 0; pointer-events: none; transition: opacity .4s; }
+  .grupo-band .haste { position: absolute; left: 0; bottom: 0; height: 46px; width: 2px; background: linear-gradient(0deg, var(--ouro), rgba(224, 168, 74, .2)); }
+  .grupo-band .bands { position: absolute; left: 0; bottom: 46px; width: 290px; display: flex; flex-direction: column; gap: 6px; padding-left: 2px; }
+  .band { pointer-events: auto; display: grid; grid-template-columns: 12px auto; gap: 9px; align-items: start; text-align: left; max-width: 300px;
+    background: rgba(18, 13, 6, .94); border: 1px solid var(--ouro); border-left-width: 3px; border-radius: 0 10px 10px 0; padding: 8px 12px 8px 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 24px rgba(224, 168, 74, .12); animation: sobe .45s ease both; }
+  .band:hover { background: #241a0a; }
+  .band.urg { border-color: var(--warn); background: rgba(24, 12, 8, .94); }
+  .band .d { width: 9px; height: 9px; margin-top: 5px; transform: rotate(45deg); background: var(--ouro); }
+  .band.urg .d { background: var(--warn); }
+  .band .t { font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--txt); }
+  .band .p { display: block; font-size: 11px; font-weight: 500; color: var(--ouro-claro); margin-top: 2px; }
+  .band.urg .p { color: var(--warn); }
+  @keyframes sobe { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .grupo-band.faixa { left: 24px !important; right: 24px; top: auto !important; bottom: 72px; }
+  .grupo-band.faixa .haste { display: none; }
+  .grupo-band.faixa .bands { position: static; width: auto; flex-direction: row; flex-wrap: wrap; }
+  .grupo-band.faixa .band { width: 290px; }
+
+  /* marcos de decisão na rota (todos os trechos) */
+  .mapa .marco-dec path { fill: var(--bg); stroke: var(--ouro); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .mapa .marco-dec text { fill: var(--ouro-claro); font-size: 9px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  .mapa .marco-dec.atual path { fill: var(--ouro); }
+  .mapa .marco-dec.atual text { fill: #1b1305; }
+
+  /* decisões no texto, em destaque */
+  .bloco-dec { margin: 26px -14px 0; padding: 18px 16px 16px; border-radius: 16px; background: linear-gradient(180deg, rgba(224, 168, 74, .07), rgba(224, 168, 74, .015));
+    border: 1px solid rgba(224, 168, 74, .22); scroll-margin-top: 90px; transition: box-shadow .4s; }
+  .bloco-dec + .bloco-dec { margin-top: 14px; }
+  .bloco-dec.urg { background: linear-gradient(180deg, rgba(232, 130, 90, .08), rgba(232, 130, 90, .015)); border-color: rgba(232, 130, 90, .3); }
+  .bloco-dec.pulso { box-shadow: 0 0 0 2px var(--ouro), 0 0 40px rgba(224, 168, 74, .3); }
+  .bloco-dec .ezg h3 { font-size: 21px; }
+  .tambem { margin-top: 18px; }
+  .tambem > .rot { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--txt-3); margin-bottom: 6px; }
+
+  @media (max-width: 900px) {
+    .placar { right: 10px; top: 10px; width: 170px; padding: 8px 10px; }
+    .placar .n { font-size: 24px; }
+    .placar .prox { display: none; }
+    .hud { right: 190px; }
+    .grupo-band .bands { width: 210px; }
+    .grupo-band.faixa .band { width: auto; max-width: 100%; }
+    .band { padding: 6px 10px 6px 8px; }
+    .band .t { font-size: 12px; }
+    .grupo-band.faixa { bottom: 60px; left: 12px !important; right: 12px; }
+  }
+  /* aba Decisões: as decisões em aberto e as pendências, sem a história */
+  .aba-decisoes { max-width: 980px; margin: 0 auto; padding: 44px 20px 90px; }
+  .aba-decisoes > .k { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ouro); font-weight: 600; }
+  .aba-decisoes h2 { font-size: clamp(28px, 3vw, 38px); letter-spacing: -.03em; margin: 8px 0 6px; }
+  .aba-decisoes .sub { color: var(--txt-2); margin: 0 0 26px; }
+  .aba-decisoes > h3 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--txt-3); font-weight: 600; margin: 38px 0 12px; }
+  .aba-decisoes .bloco-dec { margin: 0 0 16px; }
+  .pend-grupo { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 6px 18px 10px; margin-bottom: 12px; }
+  .pend-grupo .g { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ouro); font-weight: 600; margin: 12px 0 2px; }
+  .pend-grupo .g span { color: var(--txt-3); margin-left: 6px; }
+  .pend-grupo .ver { background: none; border: 0; padding: 0; color: var(--txt-3); font-size: 12px; text-decoration: underline; cursor: pointer; float: right; margin-top: 12px; }
+  body.aba-dec .historia { display: none; }
+  body:not(.aba-dec) .aba-decisoes { display: none; }
+  /* o que ainda não chegou fica apagado; o que passou, esmaecido */
+  .cap.futuro .cartao { opacity: .07; }
+  .cap.passado .cartao { opacity: .3; }
+  .texto { padding-bottom: 8vh; }
+  /* encaixe: cada capítulo é uma tela; a rolagem para no começo dele */
+  html.encaixe .texto { padding-bottom: 0; }
+  html.encaixe .cap, html.encaixe .cap.rota-cap, html.encaixe .cap:first-child { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 7vh 0 6vh; }
+  html.encaixe .cap.hoje { padding: 3vh 0 2vh; }
+  html.encaixe .cap.hoje p.txt { font-size: 15px; }
+  html.encaixe .cap.hoje .nota { margin-top: 10px; padding: 8px 12px; }
+  html.encaixe .cap.hoje .passos li { padding: 4px 0; }
+  html.encaixe .cap.hoje h2 { margin: 6px 0 10px; }
+  html.encaixe .cap.dec-passo { padding: 1.5vh 0 1vh; }
+  html.encaixe .cap.dec-passo .bloco-dec { margin-top: 8px; padding: 14px 16px 12px; }
+  html.encaixe .cap.dec-passo .ezg-ops { margin-top: 10px; }
+  /* datas com mais peso: o "quando" de cada capítulo vira uma etiqueta */
+  .cap .quando { display: inline-block; font-size: 12.5px; letter-spacing: .1em; padding: 4px 12px; border: 1px solid var(--ouro-dim); border-radius: 20px; background: var(--ouro-fundo); color: var(--ouro-claro); font-weight: 700; }
+  .cap.hoje .quando { border-color: rgba(140, 195, 232, .45); background: rgba(140, 195, 232, .08); color: var(--info); }
+  .hud-q { font-size: 13px; color: var(--ouro-claro); }
+  .segue-dec { margin-top: 18px; font-size: 13px; color: var(--ouro); font-weight: 600; }
+  html.encaixe .cap .passos { margin: 10px 0; }
+  html.encaixe .cap .passos li { padding: 5px 0; font-size: 13px; }
+  html.encaixe .cap .bloco-dec { margin-top: 16px; }
+  @media (max-width: 900px) {
+    html.encaixe .cap, html.encaixe .cap.rota-cap, html.encaixe .cap:first-child { min-height: 54vh; justify-content: flex-start; padding: 4vh 0 4vh; }
+  }
+  /* mais compacto: menos rolagem entre capítulos */
+  .cap { min-height: 40vh; padding: 10vh 0 4vh; }
+  .cap.rota-cap { min-height: 55vh; }
+  .cap:first-child { padding-top: 12vh; }
+  @media (max-width: 900px) {
+    .cap { min-height: 0; padding: 5vh 0 7vh; }
+    .cap.rota-cap { min-height: 45vh; }
+    .cap:first-child { padding-top: 4vh; }
+  }
+</style>
+</head>
+<body>
+<script>
+  // Os scripts da história leem window.H ao carregar: só entram depois que os dados chegam.
+  const carregar = (src) => new Promise((ok, erro) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = () => erro(new Error('não carregou ' + src));
+    document.body.appendChild(s);
+  });
+  const escH = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let abaInicial = 'planejamento', cab = {};
+
+  window.iniciar = async (dados) => {
+    if (window.H) return window.mostrarAba(dados.aba);
+    try {
+      const historia = JSON.parse(JSON.stringify(dados.historia));
+      window.H = { ...historia, IDX: Object.fromEntries(historia.ROTA.map((p, i) => [p.cod, i])) };
+      abaInicial = dados.aba || 'planejamento';
+      cab = dados.cab || {};
+      for (const f of ['mapa.js?v=e587d72c8d', 'ui.js?v=150a46738b', 'rota-base.js?v=700661a98b']) await carregar(f);
+      UI.topo = cabecalho;
+      principal();
+    } catch (e) {
+      console.error(e);
+      document.body.innerHTML = '<p class="falha">Não foi possível montar o planejamento nesta página. Recarregue o site e tente de novo.</p>';
+    }
+  };
+
+  function cabecalho() {
+    document.body.insertAdjacentHTML('afterbegin', `<header class="top"><div class="top-inner">
+      <svg class="mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 12h36M24 12v5"/><path d="M13 22h16a5 5 0 0 1 5 5v4H18a5 5 0 0 1-5-5v-4Z"/><path d="M34 27h6l-3 4h-3M16 31v5M13 36h8"/></svg>
+      <span class="org">${escH(cab.org)}</span>
+      <span class="scope">${escH(cab.quem)}</span>
+      <nav class="abas"><a data-aba="contas">Contas</a><a data-aba="planejamento">Planejamento</a><a data-aba="decisoes">Decisões</a></nav>
+      <span class="spacer"></span>
+      <span class="stamp">${escH(cab.stamp)}</span>
+      <button class="sair">Sair</button>
+    </div></header>`);
+    document.querySelectorAll('.top nav a').forEach((a) => a.addEventListener('click', () => parent.irAba(a.dataset.aba)));
+    document.querySelector('.top .sair').addEventListener('click', () => parent.sair());
+  }
+
+  function principal() {
+  const { CAP, DEC, ROTA } = H;
+  const decsDe = (c) => [...(c.dec || []), ...(c.decCurtas || [])];
+  const passos = CAP.flatMap((c, ci) => {
+    const n = (c.dec || []).length;
+    const capitulo = {
+      tipo: 'cap', ci, classe: `${c.id} ${c.hoje ? 'hoje' : ''} ${c.regiao ? 'rota-cap' : ''}`,
+      html: ROTA_BASE.cartao(c,
+        (n ? `<div class="segue-dec">${n === 1 ? '1 decisão' : `${n} decisões`} a seguir ↓</div>` : '') +
+        (c.decCurtas ? `<div class="tambem"><div class="rot">Também em aberto neste trecho</div>${c.decCurtas.map((id) => `<div id="dec-${id}">${UI.encruzilhadaCurta(id)}</div>`).join('')}</div>` : '')),
+    };
+    // a decisão ganha uma tela só dela (o mapa fica parado no mesmo ponto)
+    const decs = (c.dec || []).map((id) => ({ tipo: 'dec', ci, id, classe: 'dec-passo',
+      html: `<div class="cartao"><div class="bloco-dec ${UI.urgente(DEC[id]) ? 'urg' : ''}" id="dec-${id}">${UI.encruzilhadaGrande(id)}</div></div>` }));
+    return [capitulo, ...decs];
+  });
+
+  // marcos numerados na rota: onde há decisões
+  const marcos = [];
+  let grupo = null, capAtual = -1;
+  const base = ROTA_BASE.montar({
+    nome: 'Rota · Bandeiras', passos, resumo: false, encaixe: true,
+    aoTrocar(passo) { capAtual = passo.ci; desenharBandeiras(CAP[passo.ci]); marcos.forEach((m) => m.g.classList.toggle('atual', m.ci === passo.ci)); },
+    aoQuadro(i, k) {
+      marcos.forEach((m) => m.g.setAttribute('transform', `translate(${m.x} ${m.y}) translate(${(-12 * k).toFixed(3)} ${(-12 * k).toFixed(3)}) scale(${k.toFixed(4)})`));
+      if (grupo && !grupo.classList.contains('faixa')) {
+        const c = CAP[capAtual], q = ROTA[c.rota[1]], t = base.mapa.paraTela(q.lat, q.lon);
+        if (t) { const r = base.palco.getBoundingClientRect();
+          const hB = grupo.querySelector('.bands').offsetHeight;
+          const pl = base.palco.querySelector('.placar'), x = Math.max(16, Math.min(r.width - 320, t.x));
+          // não deixa as bandeiras subirem por baixo do placar
+          const topoLivre = x + 300 > pl.offsetLeft ? pl.offsetTop + pl.offsetHeight + 12 : 70;
+          const y = Math.max(hB + 46 + topoLivre, Math.min(r.height - 90, t.y));
+          grupo.style.transform = `translate(${x}px, ${y}px)`; }
+      }
+    },
+  });
+  CAP.forEach((c, ci) => {
+    const n = decsDe(c).length; if (!n) return;
+    const q = ROTA[c.rota[1]], [x, y] = MAPA.xy(q.lat, q.lon);
+    // capítulos no mesmo ponto (Rio) somam num marco só
+    const ja = marcos.find((m) => m.x === x && m.y === y);
+    if (ja) { ja.n += n; ja.t.textContent = ja.n; return; }
+    const g = base.mapa.el('g', { class: 'marco-dec' }, base.mapa.gExtra);
+    base.mapa.el('path', { d: 'M0 -8 L8 0 L0 8 L-8 0 Z' }, g);
+    const t = base.mapa.el('text', {}, g); t.textContent = n;
+    marcos.push({ g, t, x, y, n, ci });
+  });
+
+  function desenharBandeiras(c) {
+    const camada = document.getElementById('camada');
+    camada.querySelector('.grupo-band')?.remove();
+    grupo = null;
+    const ids = decsDe(c); if (!ids.length) return;
+    const faixa = !!c.cena || innerWidth < 900; // sem geografia (ponte, 1º voo, pagamento) ou celular: faixa embaixo
+    const lista = innerWidth < 900
+      ? `<button class="band" data-ir="${ids[0]}"><span class="d"></span><span class="t">${ids.length === 1 ? '1 encruzilhada' : `${ids.length} encruzilhadas`} neste trecho<span class="p">ver abaixo ↓</span></span></button>`
+      : ids.map((id) => { const d = DEC[id]; return `<button class="band ${UI.urgente(d) ? 'urg' : ''}" data-ir="${id}"><span class="d"></span>
+        <span class="t">${UI.esc(d.titulo)}<span class="p">${UI.esc(UI.prazoTexto(d))}</span></span></button>`; }).join('');
+    camada.insertAdjacentHTML('beforeend', `<div class="grupo-band ${faixa ? 'faixa' : ''}"><div class="haste"></div><div class="bands">${lista}</div></div>`);
+    grupo = camada.querySelector('.grupo-band');
+  }
+
+  // placar: decisões em aberto; sem decisões, as pendências (passos que faltam)
+  const abertas = Object.keys(DEC);
+  if (abertas.length) {
+    const proxima = [...abertas].sort((a, b) => DEC[a].ordem.localeCompare(DEC[b].ordem))[0];
+    const urg = abertas.filter((id) => UI.urgente(DEC[id])).length;
+    base.palco.insertAdjacentHTML('beforeend', `<div class="placar"><div class="n">${abertas.length}<small>decisões em aberto</small></div>
+      <div class="l"><b>${urg}</b> vencem antes da entrega ou em até 3 semanas</div>
+      <div class="prox" data-ir="${proxima}">Próxima a vencer<b>${UI.esc(DEC[proxima].titulo)}</b>${UI.esc(UI.prazoTexto(DEC[proxima]))}</div></div>`);
+  } else {
+    const pend = CAP.flatMap((c, ci) => (c.passos || []).filter((x) => x[1] !== 'concluído').map((x) => ({ x, ci })));
+    const afazer = pend.filter((q) => q.x[1] === 'a fazer');
+    const prox = afazer[0] || pend[0];
+    base.palco.insertAdjacentHTML('beforeend', `<div class="placar"><div class="n">${pend.length}<small>pendências</small></div>
+      <div class="l"><b>0</b> decisões em aberto · <b>${afazer.length}</b> a fazer</div>
+      ${prox ? `<div class="prox" data-cap="${prox.ci}">Próxima<b>${UI.esc(prox.x[0])}</b>${UI.esc(prox.x[2])}</div>` : ''}</div>`);
+  }
+  document.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-cap]'); if (!c) return;
+    base.irPara(passos.findIndex((q) => q.ci === +c.dataset.cap));
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ir]'); if (!b) return;
+    const alvo = document.getElementById('dec-' + b.dataset.ir); if (!alvo) return;
+    const det = alvo.querySelector('details'); if (det) det.open = true;
+    const iDec = passos.findIndex((q) => q.tipo === 'dec' && q.id === b.dataset.ir);
+    if (iDec >= 0) base.irPara(iDec); else alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const bloco = alvo.classList.contains('bloco-dec') ? alvo : alvo.querySelector('.ez-curta');
+    bloco.classList.add('pulso'); setTimeout(() => bloco.classList.remove('pulso'), 1800);
+  });
+
+  // ---------- aba Decisões (no site: a aba do cabeçalho) ----------
+  {
+    const ids = Object.keys(DEC).sort((a, b) => DEC[a].ordem.localeCompare(DEC[b].ordem));
+    const grupos = CAP.map((c, ci) => ({ c, ci, ps: (c.passos || []).filter((p) => p[1] !== 'concluído') })).filter((g) => g.ps.length);
+    const nPend = grupos.reduce((n, g) => n + g.ps.length, 0);
+    document.querySelector('.historia').insertAdjacentHTML('afterend', `<section class="aba-decisoes" id="abaDecisoes">
+      <div class="k">SPE · a vinda da aeronave</div><h2>Decisões e pendências</h2>
+      <p class="sub">${ids.length} ${ids.length === 1 ? 'decisão' : 'decisões'} em aberto e ${nPend} ${nPend === 1 ? 'pendência' : 'pendências'}, na ordem em que vencem.</p>
+      <h3>Decisões em aberto</h3>
+      ${ids.length ? ids.map((id) => `<div class="bloco-dec ${UI.urgente(DEC[id]) ? 'urg' : ''}">${UI.encruzilhadaGrande(id)}</div>`).join('') : '<p class="mudo">Nenhuma decisão em aberto.</p>'}
+      <h3>Pendências</h3>
+      ${grupos.map((g) => `<div class="pend-grupo"><button class="ver" data-ver-cap="${g.ci}">ver na história</button>
+        <div class="g">${UI.esc(g.c.titulo)}<span>${UI.esc(g.c.quando)}</span></div>${UI.passos(g.ps)}</div>`).join('')}
+    </section>`);
+    UI.ligar(document.getElementById('abaDecisoes'));
+
+    // quem troca de aba é a página principal (o endereço #planejamento / #decisoes fica lá)
+    const links = document.querySelectorAll('.top nav a');
+    window.mostrarAba = (aba) => {
+      const dec = aba === 'decisoes';
+      document.body.classList.toggle('aba-dec', dec);
+      document.documentElement.classList.toggle('encaixe', !dec);
+      links.forEach((a) => a.classList.toggle('on', a.dataset.aba === aba));
+      scrollTo(0, 0);
+      if (!dec) dispatchEvent(new Event('scroll'));
+    };
+    window.mostrarAba(abaInicial);
+    document.addEventListener('click', (e) => {
+      const v = e.target.closest('[data-ver-cap]'); if (!v) return;
+      const ci = +v.dataset.verCap;
+      parent.irAba('planejamento');
+      requestAnimationFrame(() => base.irPara(passos.findIndex((q) => q.ci === ci)));
+    });
+  }
+  }
+</script>
+</body>
+</html>

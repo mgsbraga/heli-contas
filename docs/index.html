@@ -139,6 +139,23 @@
   .scope.total { border-color: var(--accent-dim); color: var(--accent); }
   .spacer { flex: 1; }
   .stamp { font-size: 11.5px; color: var(--txt-3); }
+  .top-inner { flex-wrap: wrap; }
+
+  /* abas: Contas | Planejamento | Decisões (só acesso total, e só se houver planejamento publicado) */
+  .abas { display: flex; gap: 2px; margin-left: 6px; }
+  .abas a { color: var(--txt-2); text-decoration: none; font-size: 13.5px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  .abas a:hover { color: var(--txt); }
+  .abas a.on { color: var(--txt); background: var(--panel-2); }
+  @media (max-width: 700px) {
+    .top-inner { padding: 12px 16px; gap: 10px; }
+    .stamp { display: none; }
+    .abas { order: 9; width: 100%; margin: 0; }
+    #btnSair { padding: 7px 12px; }
+  }
+  /* Planejamento e Decisões rodam numa página própria, por cima de tudo, com o mesmo cabeçalho */
+  #quadroHistoria { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 50; background: var(--bg); display: none; }
+  body.na-historia { overflow: hidden; }
+  body.na-historia #quadroHistoria { display: block; }
 
   /* KPIs */
   .kpis {
@@ -357,6 +374,9 @@
       </svg>
       <span class="org" id="appOrg"></span>
       <span class="scope" id="appScope"></span>
+      <nav class="abas" id="abas" hidden>
+        <a data-aba="contas" class="on">Contas</a><a data-aba="planejamento">Planejamento</a><a data-aba="decisoes">Decisões</a>
+      </nav>
       <span class="spacer"></span>
       <span class="stamp" id="appStamp"></span>
       <button class="btn btn-ghost" id="btnSair">Sair</button>
@@ -547,7 +567,55 @@ async function abrirLegado(senha) {
   }
 }
 
-$('#btnSair').addEventListener('click', () => location.reload());
+const sair = () => { history.replaceState(null, '', location.pathname); location.reload(); };
+$('#btnSair').addEventListener('click', sair);
+
+// ---------------------------------------------------------------- abas
+// Planejamento e Decisões: a história da vinda da aeronave (DADOS.historia), que só existe no
+// ledger completo. Roda em historia/historia.html, num iframe, e recebe os dados já decifrados.
+
+const ABAS = ['contas', 'planejamento', 'decisoes'];
+let quadro = null, quadroPronto = null;
+
+const temHistoria = () => ESCOPO === 'total' && !!DADOS?.historia;
+const abaDoEndereco = () => {
+  const a = location.hash.slice(1);
+  return temHistoria() && ABAS.includes(a) ? a : 'contas';
+};
+
+function abrirQuadro() {
+  if (quadroPronto) return quadroPronto;
+  quadro = document.createElement('iframe');
+  quadro.id = 'quadroHistoria';
+  quadro.title = 'Planejamento e decisões';
+  quadroPronto = new Promise((ok) => quadro.addEventListener('load', ok, { once: true }));
+  quadro.src = 'historia/historia.html?v=e98bf62ce9';
+  document.body.appendChild(quadro);
+  return quadroPronto;
+}
+
+async function aplicarAba() {
+  const aba = abaDoEndereco();
+  document.querySelectorAll('#abas a').forEach((a) => a.classList.toggle('on', a.dataset.aba === aba));
+  if (aba === 'contas') { document.body.classList.remove('na-historia'); return; }
+  document.body.classList.add('na-historia');
+  await abrirQuadro();
+  await quadro.contentWindow.iniciar({
+    historia: DADOS.historia, aba,
+    cab: { org: $('#appOrg').textContent, quem: $('#appScope').textContent, stamp: $('#appStamp').textContent },
+  });
+  quadro.contentWindow.focus();
+}
+
+// chamadas também de dentro do iframe
+window.irAba = (aba) => {
+  if (aba === abaDoEndereco()) return aplicarAba();
+  history.pushState(null, '', aba === 'contas' ? location.pathname : '#' + aba);
+  aplicarAba();
+};
+window.sair = sair;
+addEventListener('popstate', () => { if (DADOS) aplicarAba(); });
+$('#abas').addEventListener('click', (e) => { const a = e.target.closest('[data-aba]'); if (a) irAba(a.dataset.aba); });
 
 // ---------------------------------------------------------------- render
 
@@ -561,6 +629,9 @@ function render() {
 
   if (ESCOPO === 'total') renderTotal();
   else renderResumo();
+
+  $('#abas').hidden = !temHistoria();
+  aplicarAba();
 }
 
 function agregar(lancs, chave) {
