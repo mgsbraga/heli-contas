@@ -428,7 +428,7 @@
 </div>
 
 <script type="module">
-import { derivarChave, derivarBits, importarChave, decifrar, paraObjeto, b64, idDoLogin } from './crypto.mjs';
+import { derivarChave, derivarBits, importarChave, decifrar, paraObjeto, b64, idDoLogin } from './crypto.mjs?v=4ef591f981';
 
 const $ = (s) => document.querySelector(s);
 const brl = (n) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -480,7 +480,7 @@ let NOME = '';        // quem entrou
 $('#gateForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const usuario = $('#usuario').value;
-  const senha = $('#senha').value;
+  const senha = $('#senha').value.trim();   // senha colada com espaço sobrando
   if ((!usuario.trim() && !META?.saltTotal) || !senha || !META) return;
 
   $('#gateBtn').disabled = true;
