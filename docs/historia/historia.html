@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Planejamento</title>
 <link rel="stylesheet" href="base.css?v=c804c9296b">
-<link rel="stylesheet" href="rota.css?v=3a9d591da6">
+<link rel="stylesheet" href="rota.css?v=b1a910632c">
 <style>
   /* Abas Planejamento e Decisões do site de contas. Esta página não tem dados próprios: roda dentro
      do site (iframe) e recebe a história já decifrada da página principal, por iniciar(). */
@@ -159,7 +159,7 @@
       window.H = { ...historia, IDX: Object.fromEntries(historia.ROTA.map((p, i) => [p.cod, i])) };
       abaInicial = dados.aba || 'planejamento';
       cab = dados.cab || {};
-      for (const f of ['mapa.js?v=e587d72c8d', 'ui.js?v=150a46738b', 'rota-base.js?v=700661a98b']) await carregar(f);
+      for (const f of ['mapa.js?v=e587d72c8d', 'ui.js?v=150a46738b', 'rota-base.js?v=725e567a14']) await carregar(f);
       UI.topo = cabecalho;
       principal();
     } catch (e) {

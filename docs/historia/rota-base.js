@@ -18,6 +18,7 @@
       ${c.numeros ? `<div class="numeros-grandes">${c.numeros.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>` : ''}
       ${c.regiao ? `<div class="paradas">${paradas(c.rota[0], c.rota[1])}</div>` : ''}
       ${c.nota ? `<div class="nota">${esc(c.nota)}</div>` : ''}
+      ${c.roteiro ? `<div class="roteiro-box"><div class="passos-cab">Roteiro da entrega</div><ol class="roteiro">${c.roteiro.map(([t, d]) => `<li><div><b>${esc(t)}</b>${d ? ` <span>· ${esc(d)}</span>` : ''}</div></li>`).join('')}</ol></div>` : ''}
       ${(c.div || []).map(window.UI.divergencia).join('')}
       ${c.passos ? `<div class="passos-box"><div class="passos-cab">${c.passos.length > 1 ? 'Passos' : 'Passo'}<span>${[nAnd ? `${nAnd} em andamento` : '', nOk ? `${nOk} concluído${nOk > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ')}</span></div>${window.UI.passos(c.passos)}</div>` : ''}
       ${extra}

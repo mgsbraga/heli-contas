@@ -68,6 +68,13 @@
   .passos-cab { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ouro); font-weight: 600; }
   .passos-cab span { color: var(--txt-3); letter-spacing: .04em; text-transform: none; font-weight: 500; margin-left: 8px; font-size: 12px; }
   .passos-box .passos { margin-top: 6px; }
+  /* roteiro: etapas numeradas, em ordem (não são pendências) */
+  .roteiro-box { margin-top: 16px; }
+  .roteiro { list-style: none; margin: 8px 0 0; padding: 0; counter-reset: r; border-top: 1px solid var(--line-soft); }
+  .roteiro li { counter-increment: r; display: grid; grid-template-columns: 22px 1fr; gap: 0 10px; align-items: baseline; padding: 6px 0; font-size: 13.5px; line-height: 1.45; border-bottom: 1px solid var(--line-soft); }
+  .roteiro li::before { content: counter(r); width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--ouro-dim); background: var(--ouro-fundo); color: var(--ouro-claro); font-size: 11px; font-weight: 700; display: grid; place-items: center; align-self: start; margin-top: 1px; }
+  .roteiro b { color: var(--txt); font-weight: 600; }
+  .roteiro span { color: var(--txt-3); }
   details.passos-box > summary { cursor: pointer; font-size: 12.5px; color: var(--txt-2); list-style: none; }
   details.passos-box > summary::-webkit-details-marker { display: none; }
   details.passos-box > summary::before { content: '▸ '; color: var(--txt-3); }
